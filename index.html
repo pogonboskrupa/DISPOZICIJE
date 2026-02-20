@@ -270,8 +270,7 @@ td.warn{color:var(--accent);font-weight:600;}
       <div class="form-grid">
         <div class="form-group" style="grid-column:span 2">
           <label>Kupac *</label>
-          <input type="text" id="n_kupac" placeholder="Naziv kupca" list="kupciList">
-          <datalist id="kupciList"></datalist>
+          <select id="n_kupac"><option value="">— Odaberi kupca —</option></select>
         </div>
         <div class="form-group">
           <label>Broj dispozicije *</label>
@@ -389,8 +388,7 @@ td.warn{color:var(--accent);font-weight:600;}
     <div class="form-grid" style="margin-bottom:14px">
       <div class="form-group" style="grid-column:span 2">
         <label>Kupac *</label>
-        <input type="text" id="e_kupac" list="editKupciList">
-        <datalist id="editKupciList"></datalist>
+        <select id="e_kupac"><option value="">— Odaberi kupca —</option></select>
       </div>
       <div class="form-group">
         <label>Broj dispozicije *</label>
@@ -461,6 +459,7 @@ td.warn{color:var(--accent);font-weight:600;}
 // ═══════════════════════════════════════════════════════
 const SHEET_ID  = '1DIpllQlrMJwE9wpF1Gtwbnbh6ghYM5f1PimSK2gwVQQ';
 const SHEET_NAME = 'INDEKS_OTPREMA';
+const BAZA_SHEET = 'SPISAK KUPACA';
 const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
 
@@ -469,6 +468,7 @@ const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci
 // ═══════════════════════════════════════════════════════
 let dispozicije = [];
 let otpreme     = [];
+let kupacList   = [];
 let pendingOtp  = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
@@ -551,6 +551,8 @@ async function initFirebase() {
   db = window._db;
   fs = window._fb;
 
+  setLoader('Učitavanje kupaca...');
+  await loadKupacList();
   setLoader('Učitavanje dispozicija...');
 
   // ── seed defaults if Firestore is empty ──────────────
@@ -591,6 +593,22 @@ async function initFirebase() {
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('dateBadge').textContent =
     new Date().toLocaleDateString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+
+async function loadKupacList() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(BAZA_SHEET)}&range=A2:A500&headers=0`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
+    kupacList = (json.table.rows || [])
+      .map(r => r.c && r.c[0] && r.c[0].v ? String(r.c[0].v).trim() : '')
+      .filter(Boolean)
+      .sort((a,b) => a.localeCompare(b));
+  } catch(e) {
+    console.warn('Nije moguće učitati listu kupaca iz Sheets:', e);
+    kupacList = [];
+  }
 }
 
 function setLoader(msg) {
@@ -811,9 +829,12 @@ function renderStatusBar() {
 //  NOVA DISPOZICIJA
 // ═══════════════════════════════════════════════════════
 function renderNova() {
-  const dl    = document.getElementById('kupciList');
-  const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
-  if (dl) dl.innerHTML = kupci.map(k=>`<option value="${k}">`).join('');
+  const sel = document.getElementById('n_kupac');
+  if (sel) {
+    const src = kupacList.length ? kupacList : [...new Set(dispozicije.map(d=>d.kupac))].sort();
+    sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
+      src.map(k=>`<option value="${k}">${k}</option>`).join('');
+  }
   document.getElementById('n_datum').value = localDateStr();
 }
 
@@ -856,8 +877,19 @@ async function deleteDisp(id) {
 function editDisp(id) {
   const d = dispozicije.find(x => x.id === id);
   if (!d) return;
+  // Popuni select kupaca
+  const sel = document.getElementById('e_kupac');
+  const src = kupacList.length ? kupacList : [...new Set(dispozicije.map(x=>x.kupac))].sort();
+  sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
+    src.map(k=>`<option value="${k}">${k}</option>`).join('');
+  // Ako kupac nije u listi, dodaj ga
+  if (d.kupac && !src.includes(d.kupac)) {
+    const opt = document.createElement('option');
+    opt.value = d.kupac; opt.textContent = d.kupac;
+    sel.appendChild(opt);
+  }
   document.getElementById('e_id').value    = d.id;
-  document.getElementById('e_kupac').value = d.kupac || '';
+  sel.value = d.kupac || '';
   document.getElementById('e_broj').value  = d.broj  || '';
   document.getElementById('e_datum').value = d.datum || '';
   document.getElementById('e_ugovor').value= d.ugovor|| '';
@@ -869,10 +901,6 @@ function editDisp(id) {
   document.getElementById('e_fl').value    = d.fl  || '';
   document.getElementById('e_oc').value    = d.oc  || '';
   document.getElementById('e_od').value    = d.od  || '';
-  // Popuni datalist kupaca
-  const dl = document.getElementById('editKupciList');
-  const kupci = [...new Set(dispozicije.map(x=>x.kupac))].sort();
-  if (dl) dl.innerHTML = kupci.map(k=>`<option value="${k}">`).join('');
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -907,10 +935,10 @@ function closeEditModal() {
 //  RUČNA OTPREMA
 // ═══════════════════════════════════════════════════════
 function renderOtprema() {
-  const sel   = document.getElementById('o_kupac');
-  const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
+  const sel = document.getElementById('o_kupac');
+  const src = kupacList.length ? kupacList : [...new Set(dispozicije.map(d=>d.kupac))].sort();
   sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
-    kupci.map(k=>`<option value="${k}">${k}</option>`).join('');
+    src.map(k=>`<option value="${k}">${k}</option>`).join('');
   document.getElementById('o_datum').value = localDateStr();
 }
 
