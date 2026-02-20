@@ -526,10 +526,12 @@ async function fbSetMeta(key, data) {
 //  BALANCE
 // ═══════════════════════════════════════════════════════
 function getBalance(disp) {
+  const _today = new Date(); _today.setHours(0,0,0,0);
+  const _todayStr = _today.toISOString().slice(0,10);
   const spent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  otpreme.filter(o => o.disp_id === disp.id).forEach(o => {
-    FIELDS.forEach(f => spent[f] += (o[f]||0));
-  });
+  otpreme
+    .filter(o => o.disp_id === disp.id && (!o.datum || o.datum < _todayStr))
+    .forEach(o => { FIELDS.forEach(f => spent[f] += (o[f]||0)); });
   const bal = {};
   FIELDS.forEach(f => bal[f] = (disp[f]||0) - spent[f]);
   return bal;
@@ -621,8 +623,11 @@ function renderStatusBar() {
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].length;
   let orig={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   let spnt={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+  const _sbToday = new Date(); _sbToday.setHours(0,0,0,0);
+  const _sbTodayStr = _sbToday.toISOString().slice(0,10);
   dispozicije.forEach(d => FIELDS.forEach(f => orig[f]+=(d[f]||0)));
-  otpreme.forEach(o     => FIELDS.forEach(f => spnt[f]+=(o[f]||0)));
+  otpreme.filter(o => !o.datum || o.datum < _sbTodayStr)
+         .forEach(o => FIELDS.forEach(f => spnt[f]+=(o[f]||0)));
   const tO = FIELDS.reduce((s,f)=>s+orig[f],0);
   const tS = FIELDS.reduce((s,f)=>s+spnt[f],0);
   const tB = tO - tS;
@@ -904,6 +909,10 @@ async function syncSheet() {
 
     // ── existing keys to avoid double import ─────────────
     const existingKeys = new Set(otpreme.filter(o => o.sheet_key).map(o => o.sheet_key));
+    // Also collect base keys (strip trailing _d{id} from split records) so that
+    // re-running syncSheet does not create duplicates when a row was split across
+    // multiple dispositions (split records store "baseKey_dispId" not "baseKey").
+    const existingBaseKeys = new Set([...existingKeys].map(k => k.replace(/_d[A-Za-z0-9]+$/, '')));
 
     let newCount  = 0;
     let batchDocs = [];  // collect {id, data} pairs, commit at end
@@ -935,8 +944,9 @@ async function syncSheet() {
 
       // Unique key for this sheet row
       const rowKey = `sheet_${datum}_${kupacRaw}_${FIELDS.map(f=>qtyRow[f]).join('_')}`;
-      if (existingKeys.has(rowKey)) continue;
+      if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
       existingKeys.add(rowKey);
+      existingBaseKeys.add(rowKey);
 
       // ── Find dispozicije for this kupac ordered oldest first ──
       const ku = kupacRaw.toUpperCase().trim();
