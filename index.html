@@ -310,6 +310,7 @@ td.warn,.warn{color:var(--accent);font-weight:600;}
     <button class="tab active" onclick="switchTab('pregled')">📋 Dispozicije</button>
     <button class="tab" onclick="switchTab('nova')">➕ Nova dispozicija</button>
     <button class="tab" onclick="switchTab('otprema')">🚛 Ručna otprema</button>
+    <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
   </div>
 
@@ -333,7 +334,7 @@ td.warn,.warn{color:var(--accent);font-weight:600;}
             <th colspan="2"></th>
           </tr>
           <tr>
-            <th class="sortable" id="th-kupac" onclick="sortBy('kupac')">KUPAC</th><th>BROJ</th><th>DATUM</th><th>UGOVOR</th>
+            <th class="sortable" id="th-kupac" onclick="sortBy('kupac')">KUPAC</th><th>BROJ</th><th class="sortable" id="th-datum" onclick="sortBy('datum')">DATUM</th><th>UGOVOR</th>
             <th class="sortable" id="th-tc" style="border-left:2px solid var(--border)" onclick="sortBy('tc')">Trupci Č</th>
             <th class="sortable" id="th-rud" onclick="sortBy('rud')">Rudno</th>
             <th class="sortable" id="th-cd" onclick="sortBy('cd')">Cel.Duga</th>
@@ -443,6 +444,14 @@ td.warn,.warn{color:var(--accent);font-weight:600;}
         <button class="btn btn-ghost" onclick="clearOtprema()">✕ Poništi</button>
       </div>
     </div>
+  </div>
+
+  <!-- HISTORIJA DISPOZICIJA -->
+  <div id="tab-hist-disp" class="panel">
+    <div class="search-bar">
+      <input type="text" id="hdSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderHistDisp()">
+    </div>
+    <div id="histDispList"></div>
   </div>
 
   <!-- HISTORIJA -->
@@ -556,8 +565,11 @@ td.warn,.warn{color:var(--accent);font-weight:600;}
   <button class="mnav-btn" data-tab="otprema" onclick="switchTab('otprema')">
     <span class="mni">🚛</span><span class="mnl">Ručno</span>
   </button>
+  <button class="mnav-btn" data-tab="hist-disp" onclick="switchTab('hist-disp')">
+    <span class="mni">📁</span><span class="mnl">Disp.</span>
+  </button>
   <button class="mnav-btn" data-tab="historija" onclick="switchTab('historija')">
-    <span class="mni">📜</span><span class="mnl">Historija</span>
+    <span class="mni">📜</span><span class="mnl">Otpreme</span>
   </button>
 </nav>
 
@@ -587,7 +599,7 @@ function sortBy(col) {
     sortDir *= -1;
   } else {
     sortCol = col;
-    sortDir = col === 'kupac' ? 1 : -1; // kupac → A-Z, sortimenti → najveće prvo
+    sortDir = (col === 'kupac' || col === 'datum') ? 1 : -1; // kupac/datum → ASC, sortimenti → najveće prvo
   }
   document.querySelectorAll('.sortable').forEach(th => th.classList.remove('sort-asc','sort-desc'));
   const th = document.getElementById('th-' + col);
@@ -861,6 +873,15 @@ function renderPregled() {
   let kupciKeys = Object.keys(grouped);
   if (!sortCol || sortCol === 'kupac') {
     kupciKeys.sort((a, b) => sortDir * a.localeCompare(b));
+  } else if (sortCol === 'datum') {
+    kupciKeys.sort((a, b) => {
+      const aMin = [...grouped[a]].map(d => d.datum || '9999').sort()[0];
+      const bMin = [...grouped[b]].map(d => d.datum || '9999').sort()[0];
+      return sortDir * aMin.localeCompare(bMin);
+    });
+    kupciKeys.forEach(k => {
+      grouped[k].sort((a, b) => sortDir * (a.datum||'').localeCompare(b.datum||''));
+    });
   } else {
     kupciKeys.sort((a, b) => {
       const aSum = grouped[a].reduce((s, d) => s + (getBalance(d)[sortCol] || 0), 0);
@@ -1013,6 +1034,7 @@ async function addDispozicija() {
   if (!kupac||!broj) { showToast('Kupac i broj su obavezni!','error'); return; }
   const d = {
     id: 'd' + Date.now(),
+    createdAt: new Date().toISOString(),
     kupac, broj,
     datum:  document.getElementById('n_datum').value,
     ugovor: document.getElementById('n_ugovor').value.trim(),
@@ -1659,6 +1681,83 @@ function exportCSV() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  HISTORIJA DISPOZICIJA (zadnjih 30 dana)
+// ═══════════════════════════════════════════════════════
+function renderHistDisp() {
+  const search = (document.getElementById('hdSearch')?.value||'').toLowerCase();
+  const list   = document.getElementById('histDispList');
+  const now    = Date.now();
+  const ms30d  = 30 * 24 * 60 * 60 * 1000;
+
+  // Timestamp od unosa: iz createdAt ili iz id-a (d{timestamp})
+  function getCreatedTs(d) {
+    if (d.createdAt) return new Date(d.createdAt).getTime();
+    const n = parseInt(d.id.replace(/^d/, ''));
+    return isNaN(n) ? 0 : n;
+  }
+
+  const filtered = dispozicije.filter(d => {
+    if (now - getCreatedTs(d) > ms30d) return false;
+    return !search ||
+      d.kupac.toLowerCase().includes(search) ||
+      (d.broj||'').toLowerCase().includes(search) ||
+      (d.ugovor||'').toLowerCase().includes(search);
+  });
+
+  // Sortiraj od najnovijeg unosa
+  filtered.sort((a, b) => getCreatedTs(b) - getCreatedTs(a));
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">📁</div><p>Nema dispozicija unesenih u zadnjih 30 dana</p></div>`;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(d => {
+    const bal      = getBalance(d);
+    const ts       = getCreatedTs(d);
+    const uneseno  = ts ? new Date(ts).toLocaleString('bs-BA', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    const dispDat  = d.datum ? d.datum.split('-').reverse().join('.') : '—';
+    const oCount   = otpreme.filter(o => o.disp_id === d.id).length;
+    const total    = FIELDS.reduce((s,f) => s + (d[f]||0), 0);
+    const remain   = FIELDS.reduce((s,f) => s + bal[f], 0);
+    const st       = balStatus(d);
+    const stColor  = st==='over' ? 'var(--red)' : st==='done' ? '#7a7aaa' : st==='low' ? 'var(--accent)' : 'var(--green)';
+    const stLabel  = {ok:'✓ OK', low:'⚠ Malo', done:'≈ Iscrpljeno', over:'⛔ Prekoračeno', empty:'—'}[st]||'';
+
+    const amounts = FIELDS.filter(f => d[f] > 0).map(f => {
+      const orig = d[f], rem = bal[f];
+      const cls  = rem < 0 ? 'neg' : rem < orig * 0.2 ? 'warn' : 'pos';
+      const pct  = Math.max(0, Math.min(100, orig > 0 ? rem/orig*100 : 0));
+      const barCls = rem < 0 ? 'prog-neg' : rem < orig * 0.2 ? 'prog-warn' : 'prog-ok';
+      return `<div class="val-item">
+        <div class="vl">${FL[f]}</div>
+        <div class="vv"><span class="${cls}">${rem.toFixed(2)}</span><span style="color:var(--muted);font-size:11px"> / ${orig.toFixed(2)}</span></div>
+        <div class="prog-wrap"><div class="prog-bar ${barCls}" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+
+    html += `<div class="otprema-card" style="margin-bottom:8px;align-items:flex-start">
+      <div style="min-width:170px;flex-shrink:0">
+        <div style="font-family:Syne,sans-serif;font-weight:800;font-size:15px;color:var(--text);margin-bottom:3px">${d.kupac}</div>
+        <div style="font-size:12px;color:var(--muted)">Br: <strong style="color:var(--text)">${d.broj||'—'}</strong></div>
+        ${d.ugovor ? `<div style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${d.ugovor}</strong></div>` : ''}
+        <div style="font-size:12px;color:var(--muted)">Datum: <strong>${dispDat}</strong></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px">🕐 ${uneseno}</div>
+        <div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;color:${stColor};font-weight:600">${stLabel}</span>
+          ${oCount > 0 ? `<span style="font-size:11px;color:var(--muted)">${oCount} otp.</span>` : ''}
+          <span style="font-size:11px;color:var(--muted)">Ostalo: <strong style="color:${remain<0?'var(--red)':'var(--text)'}">${remain.toFixed(2)} m³</strong></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${amounts||'<span style="color:var(--muted);font-size:13px">—</span>'}</div>
+    </div>`;
+  });
+
+  list.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Prikazano ${filtered.length} dispozicij${filtered.length===1?'a':filtered.length<5?'e':'a'} unesenih u zadnjih 30 dana</div>` + html;
+}
+
+// ═══════════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════════
 function toggleDesktopView(isDesktop) {
@@ -1670,13 +1769,14 @@ function toggleDesktopView(isDesktop) {
 }
 
 function switchTab(t) {
-  const names = ['pregled','nova','otprema','historija'];
+  const names = ['pregled','nova','otprema','hist-disp','historija'];
   document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.panel').forEach((el,i) => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.mnav-btn[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===t));
   if(t==='pregled')   renderPregled();
   if(t==='nova')      renderNova();
   if(t==='otprema')   renderOtprema();
+  if(t==='hist-disp') renderHistDisp();
   if(t==='historija') renderHistorija();
 }
 
@@ -1684,8 +1784,9 @@ function renderAll() {
   const active = document.querySelector('.tab.active');
   if (!active) return;
   const idx = [...document.querySelectorAll('.tab')].indexOf(active);
-  const names = ['pregled','nova','otprema','historija'];
+  const names = ['pregled','nova','otprema','hist-disp','historija'];
   if (names[idx]==='pregled')   renderPregled();
+  if (names[idx]==='hist-disp') renderHistDisp();
   if (names[idx]==='historija') renderHistorija();
 }
 
