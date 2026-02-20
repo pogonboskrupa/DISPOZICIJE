@@ -98,9 +98,9 @@ tbody tr:hover{background:var(--surface2);}
 tbody tr:nth-child(even){background:rgba(255,255,255,.012);}
 td{padding:8px 8px;text-align:center;color:var(--muted);white-space:nowrap;}
 td.kupac{text-align:left;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text);min-width:150px;}
-td.pos{color:var(--green);font-weight:600;}
-td.neg{color:var(--red);font-weight:600;}
-td.warn{color:var(--accent);font-weight:600;}
+td.pos,.pos{color:var(--green);font-weight:600;}
+td.neg,.neg{color:var(--red);font-weight:600;}
+td.warn,.warn{color:var(--accent);font-weight:600;}
 
 /* ── CHIPS / BADGES ── */
 .bal-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
@@ -883,7 +883,7 @@ function renderPregled() {
         <td class="kupac">${i===0 ? kupac : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
         <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
-        <td style="font-size:15px;color:var(--muted)">${d.ugovor||''}</td>
+        <td style="font-size:15px;color:var(--text)">${d.ugovor||''}</td>
         <td style="border-left:2px solid var(--border)">${d.tc  ? fmtBal(bal.tc,  d.tc)  : ''}</td>
         <td>${d.rud ? fmtBal(bal.rud, d.rud) : ''}</td>
         <td>${d.cd  ? fmtBal(bal.cd,  d.cd)  : ''}</td>
