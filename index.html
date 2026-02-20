@@ -381,8 +381,8 @@ td.warn{color:var(--accent);font-weight:600;}
     <div id="syncDateList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px"></div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
       <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600">Drugi datum:</label>
-      <input type="date" id="syncCustomDate"
-        style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px">
+      <input type="text" id="syncCustomDate" placeholder="dd.mm.yyyy" maxlength="10"
+        style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace;letter-spacing:1px">
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn btn-primary" onclick="doSync()">🔄 Sinkroniziraj odabrane</button>
@@ -967,36 +967,42 @@ async function syncSheet() {
     };
 
     // Collect distinct dates < today from sheet
+    // Build count map (include today)
     const dateCountMap = {};
     for (const row of rows) {
       const d = getDate(row);
-      if (!d || d >= todayStr) continue;
+      if (!d || d > todayStr) continue;
       dateCountMap[d] = (dateCountMap[d] || 0) + 1;
     }
-    const recentDates = Object.keys(dateCountMap).sort((a,b) => b.localeCompare(a)).slice(0, 3);
 
     // Cache helpers for doSync()
     window._syncData = { rows, todayStr, cv, cs, getDate };
 
-    // Populate modal checkboxes
+    // Always show last 5 days: today + 4 back
+    const last5 = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(today.getTime() - i * 86400000);
+      last5.push(d.toISOString().slice(0, 10));
+    }
+
     const list = document.getElementById('syncDateList');
-    list.innerHTML = recentDates.length ? recentDates.map(d => {
-      const [y,m,day] = d.split('-');
+    list.innerHTML = last5.map(d => {
+      const [y, m, day] = d.split('-');
       const label = `${day}.${m}.${y}`;
-      const count = dateCountMap[d];
+      const count = dateCountMap[d] || 0;
+      const isToday = d === todayStr;
       const alreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === d);
       return `<label style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid var(--border)">
-        <input type="checkbox" value="${d}" ${alreadyDone ? '' : 'checked'} style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
-        <span style="font-weight:700;font-size:15px">${label}</span>
+        <input type="checkbox" value="${d}" ${(count > 0 && !alreadyDone) ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
+        <span style="font-weight:700;font-size:15px">${label}${isToday ? ' <em style="font-size:11px;font-weight:400;color:var(--accent)">(danas)</em>' : ''}</span>
         <span style="font-size:12px;color:var(--muted)">${count} stavki</span>
         ${alreadyDone ? '<span style="margin-left:auto;font-size:11px;color:#4caf50;font-weight:600">✓ uvezeno</span>' : ''}
+        ${count === 0 ? '<span style="margin-left:auto;font-size:11px;color:var(--muted)">nema u sheet-u</span>' : ''}
       </label>`;
-    }).join('') : '<p style="color:var(--muted);font-size:13px">Nema novih datuma u sheet-u.</p>';
+    }).join('');
 
-    // Custom date max = yesterday
+    // Clear custom input
     document.getElementById('syncCustomDate').value = '';
-    document.getElementById('syncCustomDate').max =
-      new Date(today.getTime() - 86400000).toISOString().slice(0,10);
 
     document.getElementById('syncModal').classList.add('open');
 
@@ -1021,8 +1027,22 @@ async function doSync() {
 
   const checked = [...document.querySelectorAll('#syncDateList input[type=checkbox]:checked')]
                     .map(cb => cb.value);
-  const custom  = document.getElementById('syncCustomDate').value;
-  if (custom && custom < todayStr) checked.push(custom);
+  const customRaw = document.getElementById('syncCustomDate').value.trim();
+  if (customRaw) {
+    const cm = customRaw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (cm) {
+      const customISO = `${cm[3]}-${cm[2]}-${cm[1]}`;
+      if (customISO <= todayStr) {
+        checked.push(customISO);
+      } else {
+        showToast('Datum ne može biti u budućnosti!', 'error');
+        return;
+      }
+    } else {
+      showToast('Unesite datum u formatu dd.mm.yyyy', 'error');
+      return;
+    }
+  }
   const selectedDates = [...new Set(checked)];
   if (!selectedDates.length) { showToast('Odaberi barem jedan datum!', 'error'); return; }
 
