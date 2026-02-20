@@ -4,131 +4,200 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pogon Gospodarenja – Dispozicije | Bos. Krupa</title>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {
+  getFirestore, collection, doc, getDocs, setDoc, deleteDoc,
+  onSnapshot, writeBatch, query, orderBy, serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDqA6mIrhoC9m6QkO13pEU7rPVHWz6evTc",
+  authDomain: "dispozicije-krupa.firebaseapp.com",
+  projectId: "dispozicije-krupa",
+  storageBucket: "dispozicije-krupa.firebasestorage.app",
+  messagingSenderId: "584482793304",
+  appId: "1:584482793304:web:8b05fb6c645909d2f0672d",
+  measurementId: "G-9LDVCWQYVJ"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ─── expose to global scope ───────────────────────────────────────
+window._db = db;
+window._fs = {
+  collection, doc, getDocs, setDoc, deleteDoc,
+  onSnapshot, writeBatch, query, orderBy, serverTimestamp
+};
+window._firebaseReady = true;
+window.dispatchEvent(new Event('firebaseReady'));
+</script>
+
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
-  :root {
-    --bg:#0f1117;--surface:#181c25;--surface2:#1e2330;--border:#2a3040;
-    --accent:#c8a85a;--accent2:#6fba8a;--danger:#e05a5a;--text:#dde3ee;
-    --muted:#6b7590;--green:#6fba8a;--red:#e05a5a;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:15px;min-height:100vh;}
-  header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
-  header h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:.04em;color:var(--accent);}
-  header .sub{font-size:12px;color:var(--muted);margin-top:2px;}
-  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .date-badge{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:13px;color:var(--accent);}
-  .sync-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;}
-  .sync-btn:hover{border-color:var(--accent);color:var(--accent);}
-  .sync-btn.loading{opacity:.6;pointer-events:none;}
-  .sync-status{font-size:12px;color:var(--muted);}
-  main{padding:20px 28px;max-width:1700px;}
-  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);}
-  .tab{padding:11px 22px;background:none;border:none;color:var(--muted);font-family:'Syne',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;}
-  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-  .tab:hover:not(.active){color:var(--text);}
-  .panel{display:none;}.panel.active{display:block;}
-  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
-  table{width:100%;border-collapse:collapse;font-size:14px;}
-  thead{background:var(--surface2);position:sticky;top:0;z-index:2;}
-  thead tr:first-child th{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);padding:10px 8px 4px;border-bottom:1px solid var(--border);text-align:center;}
-  thead tr:last-child th{font-size:12px;color:var(--muted);padding:4px 8px 10px;text-align:center;border-bottom:2px solid var(--border);}
-  tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
-  tbody tr:hover{background:var(--surface2);}
-  tbody tr:nth-child(even){background:rgba(255,255,255,.012);}
-  td{padding:8px 8px;text-align:center;color:var(--muted);white-space:nowrap;}
-  td.kupac{text-align:left;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--text);min-width:140px;}
-  td.num{color:var(--text);}
-  td.pos{color:var(--green);font-weight:500;}
-  td.neg{color:var(--red);font-weight:500;}
-  td.warn{color:var(--accent);}
-  td.ugovor{font-size:11px;color:var(--muted);}
-  .bal-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
-  .bal-ok{background:#1a2e22;color:var(--green);border:1px solid #3a6b4a;}
-  .bal-warn{background:#2e2a1a;color:var(--accent);border:1px solid #6b5a3a;}
-  .bal-neg{background:#2e1a1a;color:var(--red);border:1px solid #6b3a3a;}
-  .form-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:20px;}
-  .form-section h2{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--accent);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
-  .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
-  .form-group{display:flex;flex-direction:column;gap:5px;}
-  .form-group label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
-  .form-group input,.form-group select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;transition:border-color .15s;}
-  .form-group input:focus,.form-group select:focus{border-color:var(--accent);}
-  .form-group select option{background:var(--surface2);}
-  .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:.05em;transition:all .15s;}
-  .btn-primary{background:var(--accent);color:#111;}
-  .btn-primary:hover{background:#d9b96a;}
-  .btn-success{background:var(--green);color:#111;}
-  .btn-success:hover{background:#85cc9e;}
-  .btn-danger{background:var(--red);color:#fff;}
-  .btn-danger:hover{background:#ee7070;}
-  .btn-ghost{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
-  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
-  .form-actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;}
-  .section-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
-  .status-bar{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 20px;display:flex;gap:28px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
-  .stat{display:flex;flex-direction:column;gap:3px;}
-  .stat .sl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
-  .stat .sv{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
-  .sv.green{color:var(--green);}.sv.yellow{color:var(--accent);}.sv.red{color:var(--red);}
-  .divider{width:1px;background:var(--border);align-self:stretch;}
-  .search-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
-  .search-bar input{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 16px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;width:280px;}
-  .search-bar input:focus{border-color:var(--accent);}
-  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center;}
-  .modal-bg.open{display:flex;}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:92%;max-width:600px;max-height:90vh;overflow-y:auto;}
-  .modal h3{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--accent);margin-bottom:18px;}
-  .otprema-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
-  .badge{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:11px;color:var(--accent);font-weight:600;margin:2px 2px 2px 0;}
-  .badge.green{background:#1a2e22;border-color:#3a6b4a;color:var(--green);}
-  .badge.blue{background:#1a2038;border-color:#3a4a8a;color:#7a9af0;}
-  .badge.red{background:#2e1a1a;border-color:#6b3a3a;color:var(--red);}
-  .val-item{display:flex;flex-direction:column;gap:2px;}
-  .val-item .vl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
-  .val-item .vv{font-size:15px;color:var(--text);font-weight:500;}
-  .empty-state{text-align:center;padding:50px 20px;color:var(--muted);}
-  .empty-state .big{font-size:40px;margin-bottom:8px;}
-  .empty-state p{font-family:'Syne',sans-serif;font-size:14px;}
-  .avail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:10px 0;}
-  .avail-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
-  .avail-item .al{font-size:11px;color:var(--muted);text-transform:uppercase;}
-  .avail-item .av{font-size:18px;font-weight:700;margin-top:3px;}
-  .avail-item .ao{font-size:11px;color:var(--muted);}
-  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-  .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 20px;font-size:14px;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;}
-  .toast.show{transform:translateY(0);opacity:1;}
-  .toast.success{border-color:var(--green);color:var(--green);}
-  .toast.error{border-color:var(--red);color:var(--red);}
-  .sheet-info{background:#1a2038;border:1px solid #3a4a8a;border-radius:6px;padding:10px 14px;font-size:13px;color:#7a9af0;margin-bottom:14px;}
-  .otprema-source{font-size:11px;margin-top:4px;}
-  .src-sheet{color:#7a9af0;}.src-manual{color:var(--muted);}
-  .prog-wrap{background:var(--surface2);border-radius:4px;height:5px;margin-top:5px;overflow:hidden;}
-  .prog-bar{height:100%;border-radius:4px;transition:width .4s;}
-  .prog-ok{background:var(--green);}.prog-warn{background:var(--accent);}.prog-neg{background:var(--red);}
-  .del-disp-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 8px;border-radius:4px;transition:all .1s;}
-  .del-disp-btn:hover{color:var(--red);}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+:root{
+  --bg:#0f1117;--surface:#181c25;--surface2:#1e2330;--border:#2a3040;
+  --accent:#c8a85a;--green:#6fba8a;--red:#e05a5a;--text:#dde3ee;--muted:#6b7590;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:15px;min-height:100vh;}
+
+/* ── LOADER ── */
+#loader{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:16px;}
+#loader h2{font-family:'Syne',sans-serif;font-size:22px;color:var(--accent);}
+#loader p{font-size:13px;color:var(--muted);}
+.big-spinner{width:48px;height:48px;border:4px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+header h1{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:.04em;color:var(--accent);}
+header .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.date-badge{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:13px;color:var(--accent);}
+.online-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);display:inline-block;margin-right:4px;}
+.sync-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;}
+.sync-btn:hover{border-color:var(--accent);color:var(--accent);}
+.sync-btn.loading{opacity:.6;pointer-events:none;}
+.sync-status{font-size:12px;color:var(--muted);}
+
+/* ── LAYOUT ── */
+main{padding:20px 28px;max-width:1700px;}
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);}
+.tab{padding:11px 22px;background:none;border:none;color:var(--muted);font-family:'Syne',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab:hover:not(.active){color:var(--text);}
+.panel{display:none;}.panel.active{display:block;}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+thead{background:var(--surface2);position:sticky;top:0;z-index:2;}
+thead tr:first-child th{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);padding:10px 8px 4px;border-bottom:1px solid var(--border);text-align:center;}
+thead tr:last-child th{font-size:12px;color:var(--muted);padding:4px 8px 10px;text-align:center;border-bottom:2px solid var(--border);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:hover{background:var(--surface2);}
+tbody tr:nth-child(even){background:rgba(255,255,255,.012);}
+td{padding:8px 8px;text-align:center;color:var(--muted);white-space:nowrap;}
+td.kupac{text-align:left;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text);min-width:150px;}
+td.pos{color:var(--green);font-weight:600;}
+td.neg{color:var(--red);font-weight:600;}
+td.warn{color:var(--accent);font-weight:600;}
+
+/* ── CHIPS / BADGES ── */
+.bal-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.bal-ok{background:#1a2e22;color:var(--green);border:1px solid #3a6b4a;}
+.bal-warn{background:#2e2a1a;color:var(--accent);border:1px solid #6b5a3a;}
+.bal-neg{background:#2e1a1a;color:var(--red);border:1px solid #6b3a3a;}
+.badge{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:11px;color:var(--accent);font-weight:600;margin:2px 2px 2px 0;}
+.badge.green{background:#1a2e22;border-color:#3a6b4a;color:var(--green);}
+.badge.blue{background:#1a2038;border-color:#3a4a8a;color:#7a9af0;}
+.badge.red{background:#2e1a1a;border-color:#6b3a3a;color:var(--red);}
+
+/* ── PROGRESS ── */
+.prog-wrap{background:var(--border);border-radius:4px;height:5px;margin-top:5px;overflow:hidden;}
+.prog-bar{height:100%;border-radius:4px;transition:width .4s;}
+.prog-ok{background:var(--green);}.prog-warn{background:var(--accent);}.prog-neg{background:var(--red);}
+
+/* ── STATUS BAR ── */
+.status-bar{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 20px;display:flex;gap:28px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+.stat{display:flex;flex-direction:column;gap:3px;}
+.stat .sl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.stat .sv{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
+.sv.green{color:var(--green);}.sv.yellow{color:var(--accent);}.sv.red{color:var(--red);}
+.divider{width:1px;background:var(--border);align-self:stretch;}
+
+/* ── FORMS ── */
+.form-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;margin-bottom:20px;}
+.form-section h2{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--accent);margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+.form-group input,.form-group select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;transition:border-color .15s;}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent);}
+.form-group select option{background:var(--surface2);}
+.section-label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.form-actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:6px;border:none;cursor:pointer;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;letter-spacing:.05em;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#111;}.btn-primary:hover{background:#d9b96a;}
+.btn-success{background:var(--green);color:#111;}.btn-success:hover{background:#85cc9e;}
+.btn-danger{background:var(--red);color:#fff;}.btn-danger:hover{background:#ee7070;}
+.btn-ghost{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── SEARCH ── */
+.search-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.search-bar input{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 16px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;width:280px;}
+.search-bar input:focus{border-color:var(--accent);}
+.search-bar label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;}
+
+/* ── AVAIL GRID ── */
+.avail-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:10px 0;}
+.avail-item{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;}
+.avail-item .al{font-size:11px;color:var(--muted);text-transform:uppercase;}
+.avail-item .av{font-size:18px;font-weight:700;margin-top:3px;}
+.avail-item .ao{font-size:11px;color:var(--muted);}
+
+/* ── MODAL ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:92%;max-width:600px;max-height:90vh;overflow-y:auto;}
+.modal h3{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--accent);margin-bottom:18px;}
+
+/* ── HISTORIJA CARD ── */
+.otprema-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:8px;}
+.val-item{display:flex;flex-direction:column;gap:2px;}
+.val-item .vl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.val-item .vv{font-size:15px;color:var(--text);font-weight:500;}
+
+/* ── MISC ── */
+.empty-state{text-align:center;padding:50px 20px;color:var(--muted);}
+.empty-state .big{font-size:40px;margin-bottom:8px;}
+.empty-state p{font-family:'Syne',sans-serif;font-size:14px;}
+.del-disp-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 8px;border-radius:4px;transition:all .1s;}
+.del-disp-btn:hover{color:var(--red);}
+.spinner-sm{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 20px;font-size:14px;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.success{border-color:var(--green);color:var(--green);}
+.toast.error{border-color:var(--red);color:var(--red);}
+.realtime-pulse{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
 </style>
 </head>
 <body>
 
-<header>
+<!-- LOADER -->
+<div id="loader">
+  <div class="big-spinner"></div>
+  <h2>🌲 Pogon Gospodarenja</h2>
+  <p id="loaderMsg">Spajanje na Firebase...</p>
+</div>
+
+<header style="display:none" id="mainHeader">
   <div>
     <h1>🌲 POGON GOSPODARENJA – BOS. KRUPA</h1>
-    <div class="sub">Stanje po dispozicijama · online · automatska sinkronizacija otprema</div>
+    <div class="sub">
+      <span class="realtime-pulse"></span>
+      Realtime baza · svi korisnici vide iste podatke · automatska sinkronizacija otprema
+    </div>
   </div>
   <div class="header-right">
-    <div id="syncStatus" class="sync-status">Nije sinkronizirano</div>
+    <div id="syncStatus" class="sync-status">—</div>
     <button class="sync-btn" id="syncBtn" onclick="syncSheet()">
-      <span class="spinner" id="syncSpinner" style="display:none"></span>
-      🔄 Sinkroniziraj otpreme
+      <span class="spinner-sm" id="syncSpinner" style="display:none"></span>
+      🔄 Sinkroniziraj Sheet
     </button>
     <div class="date-badge" id="dateBadge"></div>
   </div>
 </header>
 
-<main>
+<main style="display:none" id="mainContent">
   <div class="tabs">
     <button class="tab active" onclick="switchTab('pregled')">📋 Dispozicije</button>
     <button class="tab" onclick="switchTab('nova')">➕ Nova dispozicija</button>
@@ -142,12 +211,10 @@
     <div class="search-bar">
       <input type="text" id="searchInput" placeholder="Pretraži po kupcu ili ugovoru..." oninput="renderPregled()">
       <button class="btn btn-ghost" onclick="exportCSV()">⬇ Export CSV</button>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;">
-        <input type="checkbox" id="showZero" onchange="renderPregled()"> Prikaži iscrpljene
-      </label>
+      <label><input type="checkbox" id="showZero" onchange="renderPregled()"> Prikaži iscrpljene</label>
     </div>
     <div class="table-wrap">
-      <table id="pregledTable">
+      <table>
         <thead>
           <tr>
             <th colspan="4"></th>
@@ -207,7 +274,7 @@
         <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="n_od" step="0.01" placeholder="0.00"></div>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary" onclick="addDispozicija()">💾 Spremi dispoziciju</button>
+        <button class="btn btn-primary" onclick="addDispozicija()">💾 Spremi u bazu</button>
         <button class="btn btn-ghost" onclick="clearNovaForm()">✕ Poništi</button>
       </div>
     </div>
@@ -217,7 +284,7 @@
   <div id="tab-otprema" class="panel">
     <div class="form-section">
       <h2>🚛 Ručni unos otpreme</h2>
-      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Otpreme iz Google Sheets se automatski povlače pritiskom na "Sinkroniziraj". Ova forma služi za ručne ispravke ili unose koji nisu u bazi.</p>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Otpreme iz Google Sheets se automatski povlače pritiskom na "Sinkroniziraj Sheet". Ova forma je za ručne unose koji nisu u bazi.</p>
       <div class="form-grid">
         <div class="form-group" style="grid-column:span 2">
           <label>Kupac *</label>
@@ -255,7 +322,7 @@
         <div class="form-group"><label>Ogr. Cij. (m³)</label><input type="number" id="o_oc" step="0.01" placeholder="0.00" oninput="chkAvail('oc')"></div>
         <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="o_od" step="0.01" placeholder="0.00" oninput="chkAvail('od')"></div>
       </div>
-      <div id="oWarn" style="color:var(--red);font-size:11px;margin-top:10px;min-height:16px;"></div>
+      <div id="oWarn" style="color:var(--red);font-size:13px;margin-top:10px;min-height:18px;"></div>
       <div class="form-actions">
         <button class="btn btn-success" onclick="submitOtprema()">✅ Potvrdi otpremu</button>
         <button class="btn btn-ghost" onclick="clearOtprema()">✕ Poništi</button>
@@ -266,13 +333,9 @@
   <!-- HISTORIJA -->
   <div id="tab-historija" class="panel">
     <div class="search-bar">
-      <input type="text" id="hSearch" placeholder="Pretraži po kupcu, broju..." oninput="renderHistorija()">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;">
-        <input type="checkbox" id="hOnlySheet"> Samo iz Google Sheets
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer;">
-        <input type="checkbox" id="hOnlyManual"> Samo ručne
-      </label>
+      <input type="text" id="hSearch" placeholder="Pretraži po kupcu, datumu..." oninput="renderHistorija()">
+      <label><input type="checkbox" id="hOnlySheet" onchange="renderHistorija()"> Samo iz Google Sheets</label>
+      <label><input type="checkbox" id="hOnlyManual" onchange="renderHistorija()"> Samo ručne</label>
     </div>
     <div id="historijaList"></div>
   </div>
@@ -293,285 +356,157 @@
 <div class="toast" id="toast"></div>
 
 <script>
-// ==================== CONFIG ====================
-const SHEET_ID = '1DIpllQlrMJwE9wpF1Gtwbnbh6ghYM5f1PimSK2gwVQQ';
-const SHEET_GID = '1093418502';
+// ═══════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════
+const SHEET_ID  = '1DIpllQlrMJwE9wpF1Gtwbnbh6ghYM5f1PimSK2gwVQQ';
 const SHEET_NAME = 'INDEKS_OTPREMA';
-
-// Column mapping (0-indexed, A=0)
-// A=DATUM, B=OTPREMAČ, C=KUPAC, D=ODJEL, E=RADILIŠTE, F=IZVOĐAČ, G=POSLOVOĐA
-// H=F/L I,  I=I,  J=II,  K=III,  L=RD,  M=TRUPCI Č,  N=CEL.DUGA,  O=CEL.CIJEPANA, P=ŠKART, Q=Σ ČETINARI
-// R=F/L L,  S=I,  T=II,  U=III,  V=TRUPCI L,  W=OGR.DUGI,  X=OGR.CIJEPANI,  Y=GULE,  Z=LIŠĆARI,  AA=UKUPNO Č+L
-const COL = {
-  datum:0, otpremac:1, kupac:2,
-  tc:12,   // M - TRUPCI Č
-  rud:11,  // L - RD
-  cd:13,   // N - CEL.DUGA
-  cc:14,   // O - CEL.CIJEPANA
-  tl:21,   // V - TRUPCI L
-  fl:17,   // R - F/L L
-  oc:23,   // X - OGR.CIJEPANI
-  od:22,   // W - OGR.DUGI
-};
-
 const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
 
-// ==================== STATE ====================
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
 let dispozicije = [];
-let otpreme = [];
-let lastSync = null;
-let pendingOtp = null;
-let storageReady = false;
+let otpreme     = [];
+let pendingOtp  = null;
+let db, fs;
 
-// ==================== STORAGE ====================
-async function loadStorage() {
-  try {
-    const [d, o, s] = await Promise.all([
-      window.storage.get('disp_bk_v3', true),
-      window.storage.get('otp_bk_v3', true),
-      window.storage.get('sync_ts_bk', true),
-    ]);
-    if (d) dispozicije = JSON.parse(d.value);
-    if (o) otpreme = JSON.parse(o.value);
-    if (s) lastSync = s.value;
-    storageReady = true;
-  } catch(e) {
-    storageReady = true;
+// ═══════════════════════════════════════════════════════
+//  DEFAULT DATA
+// ═══════════════════════════════════════════════════════
+const DEFAULT_DISP = [
+  {id:'d1', kupac:'ASIM KOMERC',      broj:'131/26-T',   datum:'2026-02-16', ugovor:'01-94-1/26',              tc:100,  rud:0,    cd:0,     cc:0,  tl:100,  fl:0,    oc:0,      od:0},
+  {id:'d2', kupac:'AA ŽITO',          broj:'69/26-OG',   datum:'2026-02-05', ugovor:'Predračun 26-0100-000009', tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:3.21},
+  {id:'d3', kupac:'AA ŽITO',          broj:'97/26-OG',   datum:'2026-02-13', ugovor:'01-572-1/26',             tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:150},
+  {id:'d4', kupac:'BAJRAMOVIĆ',       broj:'9/26-T',     datum:'2026-01-16', ugovor:'01-108-1/26',             tc:45.20,rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d5', kupac:'BAJRAMOVIĆ',       broj:'37/26-T',    datum:'2026-01-21', ugovor:'01-108-1/26',             tc:50,   rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d6', kupac:'BAJRAMOVIĆ',       broj:'73/26-T',    datum:'2026-02-02', ugovor:'01-108-1/26',             tc:104,  rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d7', kupac:'BAJRAMOVIĆ',       broj:'106/26-OG',  datum:'2026-02-17', ugovor:'01-61-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:49},
+  {id:'d8', kupac:'BOR',              broj:'60/26-T',    datum:'2026-01-28', ugovor:'01-82-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:24.60,fl:0,    oc:0,      od:0},
+  {id:'d9', kupac:'DIVA',             broj:'2/25-T',     datum:'2026-01-13', ugovor:'01-83-1/25',              tc:0,    rud:0,    cd:0,     cc:0,  tl:24.90,fl:0,    oc:0,      od:0},
+  {id:'d10',kupac:'DIVA',             broj:'68/26-T',    datum:'2026-01-30', ugovor:'01-83-1/25',              tc:0,    rud:0,    cd:0,     cc:0,  tl:50,   fl:0,    oc:0,      od:0},
+  {id:'d11',kupac:'DIVA',             broj:'105/26-T',   datum:'2026-02-06', ugovor:'Javor 01-374-1/26',       tc:0,    rud:0,    cd:0,     cc:0,  tl:4.96, fl:0,    oc:0,      od:0},
+  {id:'d12',kupac:'EURO UNA',         broj:'25/26-T',    datum:'2026-01-20', ugovor:'01-84-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:47.88,fl:0,    oc:0,      od:0},
+  {id:'d13',kupac:'EURO UNA',         broj:'82/26-T',    datum:'2026-02-03', ugovor:'01-84-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:50,   fl:0,    oc:0,      od:0},
+  {id:'d14',kupac:'HNK COMPANY',      broj:'5/26-T',     datum:'2026-01-15', ugovor:'01-90-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:4.39, fl:0,    oc:0,      od:0},
+  {id:'d15',kupac:'HNK COMPANY',      broj:'29/26-T',    datum:'2026-01-20', ugovor:'01-90-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:60,   fl:0,    oc:0,      od:0},
+  {id:'d16',kupac:'HNK COMPANY',      broj:'144/26-T',   datum:'2026-02-17', ugovor:'01-90-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:56,   fl:0,    oc:0,      od:0},
+  {id:'d17',kupac:'HUSETIĆ',          broj:'21/26-T',    datum:'2026-01-20', ugovor:'01-102-1/26',             tc:66.80,rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d18',kupac:'HOLZ TRANSPORTI',  broj:'64/26-OG',   datum:'2026-02-05', ugovor:'01-42-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:399.89, od:0},
+  {id:'d19',kupac:'IZUDIN',           broj:'89/26-T',    datum:'2026-02-03', ugovor:'01-99-1/26',              tc:30,   rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d20',kupac:'IZUDIN',           broj:'57/26-OG',   datum:'2026-02-03', ugovor:'01-43-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:2.65},
+  {id:'d21',kupac:'LONIĆ COMP',       broj:'53/26-T',    datum:'2026-01-28', ugovor:'01-92-1/26',              tc:100,  rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d22',kupac:'LONIĆ COMP',       broj:'54/26-T',    datum:'2026-01-28', ugovor:'01-92-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:38.52,fl:0,    oc:0,      od:0},
+  {id:'d23',kupac:'LONIĆ COMP',       broj:'112/26-OG',  datum:'2026-02-18', ugovor:'01-45-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:83.89},
+  {id:'d24',kupac:'LONIĆ COMP',       broj:'49/26-C',    datum:'2026-02-12', ugovor:'26-0100-000014',          tc:0,    rud:0,    cd:0,     cc:21, tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d25',kupac:'LELIĆ KOMERC',     broj:'80/26-OG',   datum:'2026-02-10', ugovor:'01-44-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:1.86},
+  {id:'d26',kupac:'LELIĆ KOMERC',     broj:'109/26-OG',  datum:'2026-02-17', ugovor:'26-0100-000016',          tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:24.70,oc:0,      od:0},
+  {id:'d27',kupac:'M-EKO',            broj:'67/26-OG',   datum:'2026-02-05', ugovor:'01-55-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:15.18,  od:0},
+  {id:'d28',kupac:'M-EKO',            broj:'82/26-OG',   datum:'2026-02-10', ugovor:'01-55-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:100,    od:0},
+  {id:'d29',kupac:'POGY',             broj:'7/26-T',     datum:'2026-01-15', ugovor:'01-85-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:10.74,fl:0,    oc:0,      od:0},
+  {id:'d30',kupac:'POGY',             broj:'86/26-T',    datum:'2026-02-03', ugovor:'01-85-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:120,  fl:0,    oc:0,      od:0},
+  {id:'d31',kupac:'POGY',             broj:'98/26-T',    datum:'2026-02-05', ugovor:'01-85-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:100,  fl:0,    oc:0,      od:0},
+  {id:'d32',kupac:'SANI GLOBAL',      broj:'116/26-T',   datum:'2026-02-11', ugovor:'01-384-1/26',             tc:1.18, rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d33',kupac:'SANI GLOBAL',      broj:'39/26-C',    datum:'2026-02-09', ugovor:'01-26-1/26',              tc:0,    rud:0,    cd:13.89, cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d34',kupac:'SANI GLOBAL',      broj:'108/26-T',   datum:'2026-02-09', ugovor:'01-86-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:42.09,fl:0,    oc:0,      od:0},
+  {id:'d35',kupac:'ŠUMAPROMET',       broj:'84/26-OG',   datum:'2026-02-11', ugovor:'01-39-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:58.47},
+  {id:'d36',kupac:'VITA JELA',        broj:'70/26-T',    datum:'2026-01-30', ugovor:'01-112-1/26',             tc:100,  rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d37',kupac:'VITA JELA',        broj:'52/26-OG',   datum:'2026-02-03', ugovor:'01-65-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:6.90},
+  {id:'d38',kupac:'SEKTOR EKOLOGIJE', broj:'2/26-TR',    datum:'2026-01-12', ugovor:'Trebov. 1/26',            tc:464.81,rud:0,   cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:141.56},
+  {id:'d39',kupac:'DRVO OBRT',        broj:'06/26-OG',   datum:'2026-01-19', ugovor:'01-67-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0},
+  {id:'d40',kupac:'DRVO OBRT',        broj:'62/26-OG',   datum:'2026-02-04', ugovor:'01-67-1/26',              tc:0,    rud:0,    cd:0,     cc:0,  tl:0,    fl:0,    oc:0,      od:0.19},
+];
+
+// ═══════════════════════════════════════════════════════
+//  FIREBASE INIT & REALTIME LISTENERS
+// ═══════════════════════════════════════════════════════
+async function initFirebase() {
+  setLoader('Spajanje na Firebase...');
+  // Wait for Firebase module to load
+  let attempts = 0;
+  while (!window._firebaseReady && attempts < 50) {
+    await sleep(100);
+    attempts++;
   }
-  if (dispozicije.length === 0) loadDefaults();
-  renderAll();
-  updateSyncStatus();
-}
+  if (!window._firebaseReady) {
+    setLoader('❌ Firebase se nije učitao. Provjerite internet vezu.');
+    return;
+  }
+  db = window._db;
+  fs = window._fs;
 
-async function save() {
-  try {
-    await Promise.all([
-      window.storage.set('disp_bk_v3', JSON.stringify(dispozicije), true),
-      window.storage.set('otp_bk_v3', JSON.stringify(otpreme), true),
-    ]);
-  } catch(e) { console.warn('Storage save failed:', e); }
-}
+  setLoader('Učitavanje dispozicija...');
 
-// ==================== DEFAULTS ====================
-function loadDefaults() {
-  dispozicije = [
-    {id:'d1',kupac:'ASIM KOMERC',broj:'131/26-T',datum:'2026-02-16',ugovor:'01-94-1/26',tc:100,rud:0,cd:0,cc:0,tl:100,fl:0,oc:0,od:0},
-    {id:'d2',kupac:'AA ŽITO',broj:'69/26-OG',datum:'2026-02-05',ugovor:'Predračun 26-0100-000009',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:3.21},
-    {id:'d3',kupac:'AA ŽITO',broj:'97/26-OG',datum:'2026-02-13',ugovor:'01-572-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:150},
-    {id:'d4',kupac:'BAJRAMOVIĆ',broj:'9/26-T',datum:'2026-01-16',ugovor:'01-108-1/26',tc:45.20,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d5',kupac:'BAJRAMOVIĆ',broj:'37/26-T',datum:'2026-01-21',ugovor:'01-108-1/26',tc:50,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d6',kupac:'BAJRAMOVIĆ',broj:'73/26-T',datum:'2026-02-02',ugovor:'01-108-1/26',tc:104,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d7',kupac:'BAJRAMOVIĆ',broj:'106/26-OG',datum:'2026-02-17',ugovor:'01-61-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:49},
-    {id:'d8',kupac:'BOR',broj:'60/26-T',datum:'2026-01-28',ugovor:'01-82-1/26',tc:0,rud:0,cd:0,cc:0,tl:24.60,fl:0,oc:0,od:0},
-    {id:'d9',kupac:'DIVA',broj:'2/25-T',datum:'2026-01-13',ugovor:'01-83-1/25',tc:0,rud:0,cd:0,cc:0,tl:24.90,fl:0,oc:0,od:0},
-    {id:'d10',kupac:'DIVA',broj:'68/26-T',datum:'2026-01-30',ugovor:'01-83-1/25',tc:0,rud:0,cd:0,cc:0,tl:50,fl:0,oc:0,od:0},
-    {id:'d11',kupac:'DIVA',broj:'105/26-T',datum:'2026-02-06',ugovor:'Javor 01-374-1/26',tc:0,rud:0,cd:0,cc:0,tl:4.96,fl:0,oc:0,od:0},
-    {id:'d12',kupac:'EURO UNA',broj:'25/26-T',datum:'2026-01-20',ugovor:'01-84-1/26',tc:0,rud:0,cd:0,cc:0,tl:47.88,fl:0,oc:0,od:0},
-    {id:'d13',kupac:'EURO UNA',broj:'82/26-T',datum:'2026-02-03',ugovor:'01-84-1/26',tc:0,rud:0,cd:0,cc:0,tl:50,fl:0,oc:0,od:0},
-    {id:'d14',kupac:'HNK COMPANY',broj:'5/26-T',datum:'2026-01-15',ugovor:'01-90-1/26',tc:0,rud:0,cd:0,cc:0,tl:4.39,fl:0,oc:0,od:0},
-    {id:'d15',kupac:'HNK COMPANY',broj:'29/26-T',datum:'2026-01-20',ugovor:'01-90-1/26',tc:0,rud:0,cd:0,cc:0,tl:60,fl:0,oc:0,od:0},
-    {id:'d16',kupac:'HNK COMPANY',broj:'144/26-T',datum:'2026-02-17',ugovor:'01-90-1/26',tc:0,rud:0,cd:0,cc:0,tl:56,fl:0,oc:0,od:0},
-    {id:'d17',kupac:'HUSETIĆ',broj:'21/26-T',datum:'2026-01-20',ugovor:'01-102-1/26',tc:66.80,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d18',kupac:'HOLZ TRANSPORTI',broj:'64/26-OG',datum:'2026-02-05',ugovor:'01-42-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:399.89,od:0},
-    {id:'d19',kupac:'IZUDIN',broj:'89/26-T',datum:'2026-02-03',ugovor:'01-99-1/26',tc:30,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d20',kupac:'IZUDIN',broj:'57/26-OG',datum:'2026-02-03',ugovor:'01-43-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:2.65},
-    {id:'d21',kupac:'LONIĆ COMP',broj:'53/26-T',datum:'2026-01-28',ugovor:'01-92-1/26',tc:100,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d22',kupac:'LONIĆ COMP',broj:'54/26-T',datum:'2026-01-28',ugovor:'01-92-1/26',tc:0,rud:0,cd:0,cc:0,tl:38.52,fl:0,oc:0,od:0},
-    {id:'d23',kupac:'LONIĆ COMP',broj:'112/26-OG',datum:'2026-02-18',ugovor:'01-45-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:83.89},
-    {id:'d24',kupac:'LONIĆ COMP',broj:'49/26-C',datum:'2026-02-12',ugovor:'26-0100-000014',tc:0,rud:0,cd:0,cc:21,tl:0,fl:0,oc:0,od:0},
-    {id:'d25',kupac:'LELIĆ KOMERC',broj:'80/26-OG',datum:'2026-02-10',ugovor:'01-44-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:1.86},
-    {id:'d26',kupac:'LELIĆ KOMERC',broj:'109/26-OG',datum:'2026-02-17',ugovor:'26-0100-000016',tc:0,rud:0,cd:0,cc:0,tl:0,fl:24.70,oc:0,od:0},
-    {id:'d27',kupac:'M-EKO',broj:'67/26-OG',datum:'2026-02-05',ugovor:'01-55-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:15.18,od:0},
-    {id:'d28',kupac:'M-EKO',broj:'82/26-OG',datum:'2026-02-10',ugovor:'01-55-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:100,od:0},
-    {id:'d29',kupac:'POGY',broj:'7/26-T',datum:'2026-01-15',ugovor:'01-85-1/26',tc:0,rud:0,cd:0,cc:0,tl:10.74,fl:0,oc:0,od:0},
-    {id:'d30',kupac:'POGY',broj:'86/26-T',datum:'2026-02-03',ugovor:'01-85-1/26',tc:0,rud:0,cd:0,cc:0,tl:120,fl:0,oc:0,od:0},
-    {id:'d31',kupac:'POGY',broj:'98/26-T',datum:'2026-02-05',ugovor:'01-85-1/26',tc:0,rud:0,cd:0,cc:0,tl:100,fl:0,oc:0,od:0},
-    {id:'d32',kupac:'SANI GLOBAL',broj:'116/26-T',datum:'2026-02-11',ugovor:'01-384-1/26',tc:1.18,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d33',kupac:'SANI GLOBAL',broj:'39/26-C',datum:'2026-02-09',ugovor:'01-26-1/26',tc:0,rud:0,cd:13.89,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d34',kupac:'SANI GLOBAL',broj:'108/26-T',datum:'2026-02-09',ugovor:'01-86-1/26',tc:0,rud:0,cd:0,cc:0,tl:42.09,fl:0,oc:0,od:0},
-    {id:'d35',kupac:'ŠUMAPROMET',broj:'84/26-OG',datum:'2026-02-11',ugovor:'01-39-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:58.47},
-    {id:'d36',kupac:'VITA JELA',broj:'70/26-T',datum:'2026-01-30',ugovor:'01-112-1/26',tc:100,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d37',kupac:'VITA JELA',broj:'52/26-OG',datum:'2026-02-03',ugovor:'01-65-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:6.90},
-    {id:'d38',kupac:'SEKTOR EKOLOGIJE',broj:'2/26-TR',datum:'2026-01-12',ugovor:'Trebov. 1/26',tc:464.81,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:141.56},
-    {id:'d39',kupac:'DRVO OBRT',broj:'06/26-OG',datum:'2026-01-19',ugovor:'01-67-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0},
-    {id:'d40',kupac:'DRVO OBRT',broj:'62/26-OG',datum:'2026-02-04',ugovor:'01-67-1/26',tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0.19},
-  ];
-}
-
-// ==================== GOOGLE SHEETS SYNC ====================
-async function syncSheet() {
-  const btn = document.getElementById('syncBtn');
-  const spinner = document.getElementById('syncSpinner');
-  btn.classList.add('loading');
-  spinner.style.display = 'inline-block';
-  document.getElementById('syncStatus').textContent = 'Sinkroniziram...';
-
-  try {
-    // Use GViz API – works for public sheets without API key
-    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
-    const res = await fetch(url);
-    const text = await res.text();
-    // GViz wraps JSON in /*O_o*/ google.visualization.Query.setResponse({...});
-    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-    const rows = json.table.rows;
-    const cols = json.table.cols;
-
-    // Build column index by label
-    const colIdx = {};
-    cols.forEach((c, i) => {
-      if (c.label) colIdx[c.label.trim().toUpperCase()] = i;
+  // ── seed defaults if Firestore is empty ──────────────
+  const dispSnap = await fs.getDocs(fs.collection(db, 'dispozicije'));
+  if (dispSnap.empty) {
+    setLoader('Inicijalno punjenje baze...');
+    const batch = fs.writeBatch(db);
+    DEFAULT_DISP.forEach(d => {
+      batch.set(fs.doc(db, 'dispozicije', d.id), d);
     });
+    await batch.commit();
+  }
 
-    // Helper to get cell value
-    const cv = (row, label) => {
-      const i = colIdx[label];
-      if (i === undefined || !row.c[i]) return 0;
-      const v = row.c[i].v;
-      return typeof v === 'number' ? v : (parseFloat(v) || 0);
-    };
-    const cs = (row, label) => {
-      const i = colIdx[label];
-      if (i === undefined || !row.c[i]) return '';
-      return String(row.c[i].v || '').trim();
-    };
-    const getDate = (row) => {
-      const i = colIdx['DATUM'];
-      if (i === undefined || !row.c[i]) return '';
-      // GViz returns dates as Date(year,month,day) or formatted string
-      const cell = row.c[i];
-      if (cell.v && typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
-        const m = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
-        if (m) {
-          const y = m[1], mo = String(parseInt(m[2])+1).padStart(2,'0'), d = String(m[3]).padStart(2,'0');
-          return `${y}-${mo}-${d}`;
-        }
-      }
-      if (cell.f) {
-        // formatted date like "19.2.2026" or "2/19/2026"
-        const parts = cell.f.split(/[.\-\/]/);
-        if (parts.length === 3) {
-          const p = parts.map(x => x.trim());
-          // detect DD.MM.YYYY
-          if (parseInt(p[0]) <= 31 && parseInt(p[1]) <= 12 && p[2].length === 4) {
-            return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
-          }
-          return cell.f;
-        }
-      }
-      return cell.f || String(cell.v || '');
-    };
-
-    let newCount = 0;
-    let skipCount = 0;
-
-    for (const row of rows) {
-      if (!row.c || !row.c[colIdx['KUPAC']]) continue;
-      const kupacRaw = cs(row, 'KUPAC');
-      if (!kupacRaw) continue;
-
-      const datum = getDate(row);
-      const rowKey = `sheet_${datum}_${kupacRaw}_${cv(row,'TRUPCI Č')}_${cv(row,'TRUPCI L')}`;
-
-      // Skip if already imported
-      if (otpreme.find(o => o.sheet_key === rowKey)) { skipCount++; continue; }
-
-      // Find matching dispozicija by kupac name (fuzzy)
-      const matchDisp = findDispForKupac(kupacRaw, datum);
-
-      if (!matchDisp) {
-        // Still import but mark unmatched
-        const otp = {
-          id: 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
-          sheet_key: rowKey,
-          source: 'sheet',
-          kupac: kupacRaw,
-          disp_id: null,
-          datum,
-          broj: cs(row, 'OTPREMAČ') || '',
-          tc: cv(row, 'TRUPCI Č'),
-          rud: cv(row, 'RD'),
-          cd: cv(row, 'CEL.DUGA'),
-          cc: cv(row, 'CEL.CIJEPANA'),
-          tl: cv(row, 'TRUPCI L'),
-          fl: cv(row, 'F/L L'),
-          oc: cv(row, 'OGR.CIJEPANI'),
-          od: cv(row, 'OGR.DUGI'),
-          unmatched: true,
-        };
-        if (hasAnyQty(otp)) { otpreme.push(otp); newCount++; }
-        continue;
-      }
-
-      const otp = {
-        id: 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
-        sheet_key: rowKey,
-        source: 'sheet',
-        kupac: kupacRaw,
-        disp_id: matchDisp.id,
-        datum,
-        broj: cs(row, 'OTPREMAČ') || '',
-        tc: cv(row, 'TRUPCI Č'),
-        rud: cv(row, 'RD'),
-        cd: cv(row, 'CEL.DUGA'),
-        cc: cv(row, 'CEL.CIJEPANA'),
-        tl: cv(row, 'TRUPCI L'),
-        fl: cv(row, 'F/L L'),
-        oc: cv(row, 'OGR.CIJEPANI'),
-        od: cv(row, 'OGR.DUGI'),
-      };
-      if (hasAnyQty(otp)) { otpreme.push(otp); newCount++; }
-      else skipCount++;
-    }
-
-    lastSync = new Date().toISOString();
-    await window.storage.set('sync_ts_bk', lastSync, true);
-    await save();
+  // ── realtime listeners ────────────────────────────────
+  fs.onSnapshot(fs.collection(db, 'dispozicije'), snap => {
+    dispozicije = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    dispozicije.sort((a,b) => a.kupac.localeCompare(b.kupac) || (a.datum||'').localeCompare(b.datum||''));
     renderAll();
-    updateSyncStatus();
-    showToast(`✅ Sinkronizirano: ${newCount} novih otprema, ${skipCount} preskočenih`, 'success');
-  } catch(e) {
-    console.error(e);
-    showToast('❌ Greška pri sinkronizaciji: ' + e.message, 'error');
-    document.getElementById('syncStatus').textContent = 'Greška!';
-  }
-
-  btn.classList.remove('loading');
-  spinner.style.display = 'none';
-}
-
-function hasAnyQty(o) {
-  return FIELDS.some(f => (o[f] || 0) > 0);
-}
-
-// Match kupac from sheet to dispozicija – by date >= disp datum, kupac fuzzy
-function findDispForKupac(kupacRaw, datumOtp) {
-  const ku = kupacRaw.toUpperCase().trim();
-  // Find all dispozicije for this kupac (fuzzy contains match)
-  const candidates = dispozicije.filter(d => {
-    const dk = d.kupac.toUpperCase().trim();
-    return dk === ku || dk.includes(ku) || ku.includes(dk);
   });
-  if (!candidates.length) return null;
-  // Filter: dispozicija datum <= otprema datum (can't spend before deposit)
-  const valid = candidates.filter(d => !d.datum || d.datum <= datumOtp);
-  if (!valid.length) return candidates[0]; // fallback
-  // Pick most recent dispozicija before otprema
-  valid.sort((a,b) => (b.datum||'').localeCompare(a.datum||''));
-  return valid[0];
+
+  fs.onSnapshot(
+    fs.query(fs.collection(db, 'otpreme'), fs.orderBy('datum', 'desc')),
+    snap => {
+      otpreme = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      renderAll();
+    }
+  );
+
+  // ── meta: last sync time ──────────────────────────────
+  try {
+    const metaSnap = await fs.getDocs(fs.collection(db, 'meta'));
+    metaSnap.forEach(d => {
+      if (d.id === 'sync') updateSyncStatus(d.data().lastSync);
+    });
+  } catch(e) {}
+
+  // Show app
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('mainHeader').style.display = 'flex';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('dateBadge').textContent =
+    new Date().toLocaleDateString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric'});
 }
 
-function updateSyncStatus() {
-  const el = document.getElementById('syncStatus');
-  if (lastSync) {
-    const d = new Date(lastSync);
-    el.textContent = `Sinkronizirano: ${d.toLocaleDateString('bs-BA')} ${d.toLocaleTimeString('bs-BA',{hour:'2-digit',minute:'2-digit'})}`;
-  } else {
-    el.textContent = 'Nije sinkronizirano';
-  }
+function setLoader(msg) {
+  document.getElementById('loaderMsg').textContent = msg;
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════
+//  FIRESTORE CRUD
+// ═══════════════════════════════════════════════════════
+async function fbSetDisp(d) {
+  await fs.setDoc(fs.doc(db, 'dispozicije', d.id), d);
+}
+async function fbDelDisp(id) {
+  await fs.deleteDoc(fs.doc(db, 'dispozicije', id));
+}
+async function fbSetOtp(o) {
+  await fs.setDoc(fs.doc(db, 'otpreme', o.id), o);
+}
+async function fbDelOtp(id) {
+  await fs.deleteDoc(fs.doc(db, 'otpreme', id));
+}
+async function fbSetMeta(key, data) {
+  await fs.setDoc(fs.doc(db, 'meta', key), data);
 }
 
-// ==================== BALANCE ====================
+// ═══════════════════════════════════════════════════════
+//  BALANCE
+// ═══════════════════════════════════════════════════════
 function getBalance(disp) {
   const spent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   otpreme.filter(o => o.disp_id === disp.id).forEach(o => {
@@ -585,20 +520,33 @@ function getBalance(disp) {
 function balStatus(disp) {
   const bal = getBalance(disp);
   const total = FIELDS.reduce((s,f) => s + (disp[f]||0), 0);
-  const remTotal = FIELDS.reduce((s,f) => s + bal[f], 0);
+  const rem   = FIELDS.reduce((s,f) => s + bal[f], 0);
   if (total === 0) return 'empty';
-  const pct = remTotal / total;
-  if (remTotal < 0) return 'over';
-  if (pct <= 0.05) return 'done';
-  if (pct <= 0.3) return 'low';
+  if (rem < 0)             return 'over';
+  if (rem / total <= 0.05) return 'done';
+  if (rem / total <= 0.30) return 'low';
   return 'ok';
 }
 
-// ==================== RENDER PREGLED ====================
+// ═══════════════════════════════════════════════════════
+//  RENDER – PREGLED
+// ═══════════════════════════════════════════════════════
+function fmtBal(bal, orig) {
+  const v = parseFloat(bal.toFixed(2));
+  const o = parseFloat((orig||0).toFixed(2));
+  if (o === 0) return '';
+  const pct = Math.max(0, Math.min(100, o>0 ? v/o*100 : 0));
+  const cls    = v < 0 ? 'neg'  : v < o*0.2 ? 'warn' : 'pos';
+  const barCls = v < 0 ? 'prog-neg' : v < o*0.2 ? 'prog-warn' : 'prog-ok';
+  return `<span class="${cls}" style="font-size:15px;font-weight:600">${v}</span>
+          <div class="prog-wrap"><div class="prog-bar ${barCls}" style="width:${pct}%"></div></div>
+          <div style="font-size:11px;color:var(--muted)">${v}/${o}</div>`;
+}
+
 function renderPregled() {
-  const search = (document.getElementById('searchInput')?.value||'').toLowerCase();
+  const search   = (document.getElementById('searchInput')?.value||'').toLowerCase();
   const showZero = document.getElementById('showZero')?.checked;
-  const body = document.getElementById('pregledBody');
+  const body     = document.getElementById('pregledBody');
   if (!body) return;
 
   const grouped = {};
@@ -608,55 +556,44 @@ function renderPregled() {
         !(d.broj||'').toLowerCase().includes(search)) return;
     const st = balStatus(d);
     if (!showZero && st === 'done' && FIELDS.reduce((s,f)=>s+(d[f]||0),0)===0) return;
-    if (!grouped[d.kupac]) grouped[d.kupac] = [];
-    grouped[d.kupac].push(d);
+    (grouped[d.kupac] = grouped[d.kupac]||[]).push(d);
   });
 
-  function fmtBal(bal, orig) {
-    const v = parseFloat(bal.toFixed(2));
-    const o = parseFloat((orig||0).toFixed(2));
-    if (o === 0) return '';
-    const pct = o > 0 ? Math.max(0, Math.min(100, v/o*100)) : 0;
-    const cls = v < 0 ? 'neg' : v < o*0.2 ? 'warn' : 'pos';
-    const barCls = v < 0 ? 'prog-neg' : v < o*0.2 ? 'prog-warn' : 'prog-ok';
-    return `<span class="${cls}" style="font-size:15px;font-weight:600">${v}</span><div class="prog-wrap"><div class="prog-bar ${barCls}" style="width:${pct}%"></div></div><div style="font-size:11px;color:var(--muted)">${v}/${o}</div>`;
-  }
+  const stChips = {
+    ok:    '<span class="bal-chip bal-ok">✓ OK</span>',
+    low:   '<span class="bal-chip bal-warn">⚠ Malo</span>',
+    done:  '<span class="bal-chip" style="background:#1a1a2e;border:1px solid #3a3a6a;color:#7a7aaa">≈ Iscrpljeno</span>',
+    over:  '<span class="bal-chip bal-neg">⛔ Prekoračeno</span>',
+    empty: '<span class="bal-chip" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted)">—</span>',
+  };
 
   let html = '';
   Object.keys(grouped).sort().forEach(kupac => {
     grouped[kupac].forEach((d, i) => {
-      const bal = getBalance(d);
-      const st = balStatus(d);
-      const stChip = {
-        ok: '<span class="bal-chip bal-ok">✓ OK</span>',
-        low: '<span class="bal-chip bal-warn">⚠ Malo</span>',
-        done: '<span class="bal-chip" style="background:#1a1a2e;border:1px solid #3a3a6a;color:#7a7aaa">≈ Iscrpljeno</span>',
-        over: '<span class="bal-chip bal-neg">⛔ Prekoračeno</span>',
-        empty: '<span class="bal-chip" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted)">—</span>',
-      }[st] || '';
+      const bal    = getBalance(d);
+      const st     = balStatus(d);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
-
       html += `<tr>
-        <td class="kupac">${i===0?kupac:''}</td>
+        <td class="kupac">${i===0 ? kupac : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
-        <td style="font-size:15px">${d.datum?d.datum.slice(5).split('-').reverse().join('.'):'—'}</td>
+        <td style="font-size:15px">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
         <td style="font-size:15px;color:var(--muted)">${d.ugovor||''}</td>
-        <td style="border-left:2px solid var(--border)">${d.tc?fmtBal(bal.tc,d.tc):''}</td>
-        <td>${d.rud?fmtBal(bal.rud,d.rud):''}</td>
-        <td>${d.cd?fmtBal(bal.cd,d.cd):''}</td>
-        <td>${d.cc?fmtBal(bal.cc,d.cc):''}</td>
-        <td style="border-left:2px solid var(--border)">${d.tl?fmtBal(bal.tl,d.tl):''}</td>
-        <td>${d.fl?fmtBal(bal.fl,d.fl):''}</td>
-        <td>${d.oc?fmtBal(bal.oc,d.oc):''}</td>
-        <td>${d.od?fmtBal(bal.od,d.od):''}</td>
-        <td>${stChip} ${oCount>0?`<span style="font-size:9px;color:var(--muted)">(${oCount} otp.)</span>`:''}</td>
-        <td><button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši dispoziciju">🗑</button></td>
+        <td style="border-left:2px solid var(--border)">${d.tc  ? fmtBal(bal.tc,  d.tc)  : ''}</td>
+        <td>${d.rud ? fmtBal(bal.rud, d.rud) : ''}</td>
+        <td>${d.cd  ? fmtBal(bal.cd,  d.cd)  : ''}</td>
+        <td>${d.cc  ? fmtBal(bal.cc,  d.cc)  : ''}</td>
+        <td style="border-left:2px solid var(--border)">${d.tl  ? fmtBal(bal.tl,  d.tl)  : ''}</td>
+        <td>${d.fl  ? fmtBal(bal.fl,  d.fl)  : ''}</td>
+        <td>${d.oc  ? fmtBal(bal.oc,  d.oc)  : ''}</td>
+        <td>${d.od  ? fmtBal(bal.od,  d.od)  : ''}</td>
+        <td>${stChips[st]||''} ${oCount>0?`<span style="font-size:11px;color:var(--muted)">(${oCount} otp.)</span>`:''}</td>
+        <td><button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši">🗑</button></td>
       </tr>`;
     });
   });
 
-  if (!html) html = `<tr><td colspan="14"><div class="empty-state"><div class="big">📭</div><p>Nema dispozicija</p></div></td></tr>`;
-  body.innerHTML = html;
+  body.innerHTML = html ||
+    `<tr><td colspan="14"><div class="empty-state"><div class="big">📭</div><p>Nema dispozicija</p></div></td></tr>`;
   renderStatusBar();
 }
 
@@ -665,13 +602,13 @@ function renderStatusBar() {
   if (!sb) return;
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].length;
   let orig={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  let spent={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  dispozicije.forEach(d=>FIELDS.forEach(f=>orig[f]+=(d[f]||0)));
-  otpreme.forEach(o=>FIELDS.forEach(f=>spent[f]+=(o[f]||0)));
-  const tO=FIELDS.reduce((s,f)=>s+orig[f],0);
-  const tS=FIELDS.reduce((s,f)=>s+spent[f],0);
-  const tB=tO-tS;
-  const sheetOtp = otpreme.filter(o=>o.source==='sheet').length;
+  let spnt={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+  dispozicije.forEach(d => FIELDS.forEach(f => orig[f]+=(d[f]||0)));
+  otpreme.forEach(o     => FIELDS.forEach(f => spnt[f]+=(o[f]||0)));
+  const tO = FIELDS.reduce((s,f)=>s+orig[f],0);
+  const tS = FIELDS.reduce((s,f)=>s+spnt[f],0);
+  const tB = tO - tS;
+  const sheetOtp  = otpreme.filter(o=>o.source==='sheet').length;
   const manualOtp = otpreme.filter(o=>o.source!=='sheet').length;
   sb.innerHTML = `
     <div class="stat"><div class="sl">Dispozicija</div><div class="sv yellow">${dispozicije.length}</div></div>
@@ -686,13 +623,14 @@ function renderStatusBar() {
     <div class="divider"></div>
     <div class="stat"><div class="sl">Otpreme Sheet</div><div class="sv" style="color:#7a9af0">${sheetOtp}</div></div>
     <div class="divider"></div>
-    <div class="stat"><div class="sl">Ručne otpreme</div><div class="sv yellow">${manualOtp}</div></div>
-  `;
+    <div class="stat"><div class="sl">Ručne otpreme</div><div class="sv yellow">${manualOtp}</div></div>`;
 }
 
-// ==================== NOVA DISPOZICIJA ====================
+// ═══════════════════════════════════════════════════════
+//  NOVA DISPOZICIJA
+// ═══════════════════════════════════════════════════════
 function renderNova() {
-  const dl = document.getElementById('kupciList');
+  const dl    = document.getElementById('kupciList');
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
   if (dl) dl.innerHTML = kupci.map(k=>`<option value="${k}">`).join('');
   document.getElementById('n_datum').value = new Date().toISOString().slice(0,10);
@@ -700,55 +638,55 @@ function renderNova() {
 
 async function addDispozicija() {
   const kupac = document.getElementById('n_kupac').value.trim();
-  const broj = document.getElementById('n_broj').value.trim();
+  const broj  = document.getElementById('n_broj').value.trim();
   if (!kupac||!broj) { showToast('Kupac i broj su obavezni!','error'); return; }
-
   const d = {
-    id:'d'+Date.now()+Math.random().toString(36).slice(2,5),
-    kupac,broj,
-    datum:document.getElementById('n_datum').value,
-    ugovor:document.getElementById('n_ugovor').value.trim(),
-    tc:parseFloat(document.getElementById('n_tc').value)||0,
-    rud:parseFloat(document.getElementById('n_rud').value)||0,
-    cd:parseFloat(document.getElementById('n_cd').value)||0,
-    cc:parseFloat(document.getElementById('n_cc').value)||0,
-    tl:parseFloat(document.getElementById('n_tl').value)||0,
-    fl:parseFloat(document.getElementById('n_fl').value)||0,
-    oc:parseFloat(document.getElementById('n_oc').value)||0,
-    od:parseFloat(document.getElementById('n_od').value)||0,
+    id: 'd' + Date.now(),
+    kupac, broj,
+    datum:  document.getElementById('n_datum').value,
+    ugovor: document.getElementById('n_ugovor').value.trim(),
+    tc:  parseFloat(document.getElementById('n_tc').value)||0,
+    rud: parseFloat(document.getElementById('n_rud').value)||0,
+    cd:  parseFloat(document.getElementById('n_cd').value)||0,
+    cc:  parseFloat(document.getElementById('n_cc').value)||0,
+    tl:  parseFloat(document.getElementById('n_tl').value)||0,
+    fl:  parseFloat(document.getElementById('n_fl').value)||0,
+    oc:  parseFloat(document.getElementById('n_oc').value)||0,
+    od:  parseFloat(document.getElementById('n_od').value)||0,
   };
-  dispozicije.push(d);
-  await save();
+  await fbSetDisp(d);
   clearNovaForm();
-  showToast(`✅ Dispozicija "${broj}" za "${kupac}" dodana!`,'success');
+  showToast(`✅ Dispozicija "${broj}" za "${kupac}" dodana!`, 'success');
   switchTab('pregled');
 }
 
 function clearNovaForm() {
-  ['n_kupac','n_broj','n_ugovor','n_tc','n_rud','n_cd','n_cc','n_tl','n_fl','n_oc','n_od'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('n_datum').value=new Date().toISOString().slice(0,10);
+  ['n_kupac','n_broj','n_ugovor','n_tc','n_rud','n_cd','n_cc','n_tl','n_fl','n_oc','n_od']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('n_datum').value = new Date().toISOString().slice(0,10);
 }
 
 async function deleteDisp(id) {
-  if (!confirm('Obriši ovu dispoziciju? Sve vezane otpreme ostaju u historiji.')) return;
-  dispozicije = dispozicije.filter(d=>d.id!==id);
-  await save();
-  renderPregled();
+  if (!confirm('Obriši dispoziciju? Otpreme u historiji ostaju.')) return;
+  await fbDelDisp(id);
   showToast('Dispozicija obrisana','success');
 }
 
-// ==================== RUČNA OTPREMA ====================
+// ═══════════════════════════════════════════════════════
+//  RUČNA OTPREMA
+// ═══════════════════════════════════════════════════════
 function renderOtprema() {
-  const sel = document.getElementById('o_kupac');
+  const sel   = document.getElementById('o_kupac');
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
-  sel.innerHTML = '<option value="">— Odaberi kupca —</option>' + kupci.map(k=>`<option value="${k}">${k}</option>`).join('');
+  sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
+    kupci.map(k=>`<option value="${k}">${k}</option>`).join('');
   document.getElementById('o_datum').value = new Date().toISOString().slice(0,10);
 }
 
 function loadKupacDisp() {
   const kupac = document.getElementById('o_kupac').value;
-  const sel = document.getElementById('o_disp');
-  const kd = dispozicije.filter(d=>d.kupac===kupac);
+  const sel   = document.getElementById('o_disp');
+  const kd    = dispozicije.filter(d=>d.kupac===kupac);
   sel.innerHTML = '<option value="">— Odaberi dispoziciju —</option>' +
     kd.map(d=>`<option value="${d.id}">${d.broj} | ${d.datum||''} | ${d.ugovor||''}</option>`).join('');
   document.getElementById('availWrap').style.display='none';
@@ -758,16 +696,16 @@ function showAvail() {
   const dispId = document.getElementById('o_disp').value;
   if (!dispId) { document.getElementById('availWrap').style.display='none'; return; }
   const disp = dispozicije.find(d=>d.id===dispId);
-  const bal = getBalance(disp);
-  const grid = document.getElementById('availGrid');
-  grid.innerHTML = FIELDS.map(f=>{
-    const o=disp[f]||0; const b=parseFloat(bal[f].toFixed(2));
-    if(o===0&&b===0) return '';
-    const pct=o>0?Math.max(0,Math.min(100,b/o*100)):0;
-    const cls=b<0?'var(--red)':b<o*0.2?'var(--accent)':'var(--green)';
+  const bal  = getBalance(disp);
+  document.getElementById('availGrid').innerHTML = FIELDS.map(f => {
+    const o = disp[f]||0;
+    const b = parseFloat(bal[f].toFixed(2));
+    if (o===0 && b===0) return '';
+    const pct = o>0 ? Math.max(0,Math.min(100,b/o*100)) : 0;
+    const col = b<0 ? 'var(--red)' : b<o*0.2 ? 'var(--accent)' : 'var(--green)';
     return `<div class="avail-item">
       <div class="al">${FL[f]}</div>
-      <div class="av" style="color:${cls}">${b} m³</div>
+      <div class="av" style="color:${col}">${b} m³</div>
       <div class="ao">od ${o} m³</div>
       <div class="prog-wrap"><div class="prog-bar ${b<0?'prog-neg':b<o*0.2?'prog-warn':'prog-ok'}" style="width:${pct}%"></div></div>
     </div>`;
@@ -779,157 +717,288 @@ function chkAvail(field) {
   const dispId = document.getElementById('o_disp').value;
   if (!dispId) return;
   const disp = dispozicije.find(d=>d.id===dispId);
-  const bal = getBalance(disp);
-  const val = parseFloat(document.getElementById('o_'+field).value)||0;
-  const warn = document.getElementById('oWarn');
-  if (val > bal[field]) {
-    warn.textContent = `⚠️ ${FL[field]}: unosite ${val} m³, raspoloživo ${parseFloat(bal[field].toFixed(2))} m³!`;
-  } else {
-    warn.textContent='';
-  }
+  const bal  = getBalance(disp);
+  const val  = parseFloat(document.getElementById('o_'+field).value)||0;
+  document.getElementById('oWarn').textContent =
+    val > bal[field]
+      ? `⚠️ ${FL[field]}: unosite ${val} m³, raspoloživo samo ${parseFloat(bal[field].toFixed(2))} m³!`
+      : '';
 }
 
 function submitOtprema() {
-  const kupac = document.getElementById('o_kupac').value;
+  const kupac  = document.getElementById('o_kupac').value;
   const dispId = document.getElementById('o_disp').value;
   if (!kupac||!dispId) { showToast('Odaberite kupca i dispoziciju!','error'); return; }
-  const vals={};
-  let total=0;
-  FIELDS.forEach(f=>{vals[f]=parseFloat(document.getElementById('o_'+f).value)||0;total+=vals[f];});
+  const vals = {};
+  let total = 0;
+  FIELDS.forEach(f => { vals[f] = parseFloat(document.getElementById('o_'+f).value)||0; total += vals[f]; });
   if (total===0) { showToast('Unesite barem jednu količinu!','error'); return; }
-  const disp = dispozicije.find(d=>d.id===dispId);
-  const bal = getBalance(disp);
+  const disp    = dispozicije.find(d=>d.id===dispId);
+  const bal     = getBalance(disp);
   const overages = FIELDS.filter(f=>vals[f]>bal[f]);
-
   document.getElementById('confirmText').innerHTML =
     `<strong>Kupac:</strong> ${kupac}<br>
      <strong>Dispozicija:</strong> ${disp.broj}<br>
      <strong>Otpremnica:</strong> ${document.getElementById('o_broj').value||'—'}<br>
      <strong>Datum:</strong> ${document.getElementById('o_datum').value}<br><br>
-     <strong>Količine:</strong><br>${FIELDS.filter(f=>vals[f]>0).map(f=>`${FL[f]}: <strong>${vals[f]} m³</strong>`).join('<br>')}
-     ${overages.length?`<br><br><span style="color:var(--red)">⚠️ Prekoračenje dispozicije za: ${overages.map(f=>FL[f]).join(', ')}</span>`:''}`;
-
-  pendingOtp = {kupac,disp_id:dispId,...vals,datum:document.getElementById('o_datum').value,broj:document.getElementById('o_broj').value,source:'manual'};
+     <strong>Količine:</strong><br>
+     ${FIELDS.filter(f=>vals[f]>0).map(f=>`${FL[f]}: <strong>${vals[f]} m³</strong>`).join('<br>')}
+     ${overages.length ? `<br><br><span style="color:var(--red)">⚠️ Prekoračenje: ${overages.map(f=>FL[f]).join(', ')}</span>` : ''}`;
+  pendingOtp = {
+    kupac, disp_id:dispId, ...vals,
+    datum: document.getElementById('o_datum').value,
+    broj:  document.getElementById('o_broj').value,
+    source:'manual'
+  };
   document.getElementById('confirmModal').classList.add('open');
 }
 
 async function confirmOtprema() {
   if (!pendingOtp) return;
-  pendingOtp.id = 'man_'+Date.now();
-  otpreme.push(pendingOtp);
-  await save();
-  pendingOtp=null;
+  pendingOtp.id = 'man_' + Date.now();
+  await fbSetOtp(pendingOtp);
+  pendingOtp = null;
   closeModal();
   clearOtprema();
-  renderAll();
-  showToast('✅ Otprema evidentirana!','success');
+  showToast('✅ Otprema evidentirana u bazi!','success');
   switchTab('pregled');
 }
 
 function closeModal() {
   document.getElementById('confirmModal').classList.remove('open');
-  pendingOtp=null;
+  pendingOtp = null;
 }
 
 function clearOtprema() {
-  document.getElementById('o_kupac').value='';
-  document.getElementById('o_disp').innerHTML='<option value="">— Odaberi dispoziciju —</option>';
-  document.getElementById('o_broj').value='';
-  document.getElementById('o_datum').value=new Date().toISOString().slice(0,10);
-  FIELDS.forEach(f=>document.getElementById('o_'+f).value='');
-  document.getElementById('availWrap').style.display='none';
-  document.getElementById('oWarn').textContent='';
+  document.getElementById('o_kupac').value = '';
+  document.getElementById('o_disp').innerHTML = '<option value="">— Odaberi dispoziciju —</option>';
+  document.getElementById('o_broj').value = '';
+  document.getElementById('o_datum').value = new Date().toISOString().slice(0,10);
+  FIELDS.forEach(f => document.getElementById('o_'+f).value = '');
+  document.getElementById('availWrap').style.display = 'none';
+  document.getElementById('oWarn').textContent = '';
 }
 
-// ==================== HISTORIJA ====================
+// ═══════════════════════════════════════════════════════
+//  HISTORIJA
+// ═══════════════════════════════════════════════════════
 function renderHistorija() {
-  const search=(document.getElementById('hSearch')?.value||'').toLowerCase();
-  const onlySheet=document.getElementById('hOnlySheet')?.checked;
-  const onlyManual=document.getElementById('hOnlyManual')?.checked;
-  const list=document.getElementById('historijaList');
-
-  let filtered=[...otpreme].reverse().filter(o=>{
-    if(onlySheet&&o.source!=='sheet') return false;
-    if(onlyManual&&o.source==='sheet') return false;
-    return o.kupac.toLowerCase().includes(search)||(o.broj||'').toLowerCase().includes(search)||(o.datum||'').includes(search);
+  const search     = (document.getElementById('hSearch')?.value||'').toLowerCase();
+  const onlySheet  = document.getElementById('hOnlySheet')?.checked;
+  const onlyManual = document.getElementById('hOnlyManual')?.checked;
+  const list       = document.getElementById('historijaList');
+  let filtered = [...otpreme].filter(o => {
+    if (onlySheet  && o.source!=='sheet') return false;
+    if (onlyManual && o.source==='sheet') return false;
+    return o.kupac.toLowerCase().includes(search) ||
+           (o.broj||'').toLowerCase().includes(search) ||
+           (o.datum||'').includes(search);
   });
-
   if (!filtered.length) {
-    list.innerHTML=`<div class="empty-state"><div class="big">📭</div><p>Nema otprema</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="big">📭</div><p>Nema otprema</p></div>`;
     return;
   }
-
-  list.innerHTML=filtered.map(o=>{
-    const disp=dispozicije.find(d=>d.id===o.disp_id);
-    const vals=FIELDS.filter(f=>o[f]>0).map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${o[f]} m³</div></div>`).join('');
-    const srcBadge=o.source==='sheet'
-      ?'<span class="badge blue">📊 Google Sheets</span>'
-      :'<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
-    const unmatch=o.unmatched?'<span class="badge red">⚠ Neusklađeno s dispozicijom</span>':'';
+  list.innerHTML = filtered.map(o => {
+    const disp   = dispozicije.find(d=>d.id===o.disp_id);
+    const vals   = FIELDS.filter(f=>o[f]>0)
+      .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${o[f]} m³</div></div>`).join('');
+    const srcBadge = o.source==='sheet'
+      ? '<span class="badge blue">📊 Google Sheets</span>'
+      : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
+    const unmatch = o.unmatched ? '<span class="badge red">⚠ Neusklađeno</span>' : '';
     return `<div class="otprema-card">
       <div style="min-width:160px">
         <div style="font-family:Syne,sans-serif;font-weight:700;font-size:16px;color:var(--text);margin-bottom:4px">${o.kupac}</div>
         <div>${srcBadge}${unmatch}</div>
-        ${disp?`<div class="badge">${disp.broj}</div>`:''}
-        ${o.broj?`<div class="badge green">${o.broj}</div>`:''}
+        ${disp ? `<div class="badge">${disp.broj}</div>` : ''}
+        ${o.broj ? `<div class="badge green">${o.broj}</div>` : ''}
         <div style="font-size:12px;color:var(--muted);margin-top:4px">${o.datum||''}</div>
       </div>
-      <div class="otprema-values" style="display:flex;gap:16px;flex-wrap:wrap;flex:1">${vals||'<span style="color:var(--muted);font-size:13px">nema količina</span>'}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;flex:1">${vals||'<span style="color:var(--muted);font-size:13px">nema količina</span>'}</div>
       <button class="btn btn-danger" style="padding:7px 14px;font-size:13px" onclick="deleteOtp('${o.id}')">🗑 Storno</button>
     </div>`;
   }).join('');
 }
 
 async function deleteOtp(id) {
-  if (!confirm('Storni ovu otpremu? Stanje dispozicije će biti vraćeno.')) return;
-  otpreme=otpreme.filter(o=>o.id!==id);
-  await save();
-  renderHistorija();
-  renderPregled();
+  if (!confirm('Storni ovu otpremu? Dispozicija će biti vraćena.')) return;
+  await fbDelOtp(id);
   showToast('Otprema stornirana','success');
 }
 
-// ==================== EXPORT CSV ====================
-function exportCSV() {
-  const rows=[['KUPAC','BROJ_DISP','DATUM_DISP','UGOVOR','BAL_TC','BAL_RUD','BAL_CD','BAL_CC','BAL_TL','BAL_FL','BAL_OC','BAL_OD','ORIG_TC','ORIG_RUD','ORIG_CD','ORIG_CC','ORIG_TL','ORIG_FL','ORIG_OC','ORIG_OD']];
-  dispozicije.forEach(d=>{
-    const bal=getBalance(d);
-    rows.push([d.kupac,d.broj,d.datum,d.ugovor,...FIELDS.map(f=>bal[f].toFixed(2)),...FIELDS.map(f=>(d[f]||0).toFixed(2))]);
+// ═══════════════════════════════════════════════════════
+//  GOOGLE SHEETS SYNC
+// ═══════════════════════════════════════════════════════
+async function syncSheet() {
+  const btn     = document.getElementById('syncBtn');
+  const spinner = document.getElementById('syncSpinner');
+  btn.classList.add('loading');
+  spinner.style.display = 'inline-block';
+  document.getElementById('syncStatus').textContent = 'Sinkroniziram...';
+  try {
+    const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
+    const rows = json.table.rows;
+    const cols = json.table.cols;
+    const colIdx = {};
+    cols.forEach((c,i) => { if(c.label) colIdx[c.label.trim().toUpperCase()] = i; });
+
+    const cv = (row, lbl) => {
+      const i = colIdx[lbl]; if(i===undefined||!row.c[i]) return 0;
+      const v = row.c[i].v; return typeof v==='number' ? v : (parseFloat(v)||0);
+    };
+    const cs = (row, lbl) => {
+      const i = colIdx[lbl]; if(i===undefined||!row.c[i]) return '';
+      return String(row.c[i].v||'').trim();
+    };
+    const getDate = row => {
+      const i = colIdx['DATUM']; if(i===undefined||!row.c[i]) return '';
+      const cell = row.c[i];
+      if (cell.v && typeof cell.v==='string' && cell.v.startsWith('Date(')) {
+        const m = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+        if (m) return `${m[1]}-${String(parseInt(m[2])+1).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+      }
+      if (cell.f) {
+        const p = cell.f.split(/[.\-\/]/).map(x=>x.trim());
+        if (p.length===3 && p[2].length===4) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+      }
+      return cell.f || String(cell.v||'');
+    };
+
+    // Build set of existing sheet_keys to avoid duplicates
+    const existingKeys = new Set(otpreme.filter(o=>o.sheet_key).map(o=>o.sheet_key));
+
+    let newCount = 0;
+    const batch = fs.writeBatch(db);
+    let batchCount = 0;
+
+    for (const row of rows) {
+      const kupacRaw = cs(row,'KUPAC'); if(!kupacRaw) continue;
+      const datum    = getDate(row);
+      const tc  = cv(row,'TRUPCI Č');
+      const rud = cv(row,'RD');
+      const cd  = cv(row,'CEL.DUGA');
+      const cc  = cv(row,'CEL.CIJEPANA');
+      const tl  = cv(row,'TRUPCI L');
+      const fl  = cv(row,'F/L L');
+      const oc  = cv(row,'OGR.CIJEPANI');
+      const od  = cv(row,'OGR.DUGI');
+      if (tc+rud+cd+cc+tl+fl+oc+od === 0) continue;
+
+      const rowKey = `sheet_${datum}_${kupacRaw}_${tc}_${tl}`;
+      if (existingKeys.has(rowKey)) continue;
+
+      const matchDisp = findDispForKupac(kupacRaw, datum);
+      const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+      const otp = {
+        id, sheet_key: rowKey, source:'sheet',
+        kupac: kupacRaw,
+        disp_id:   matchDisp ? matchDisp.id : null,
+        unmatched: !matchDisp,
+        datum, broj: cs(row,'OTPREMAČ')||'',
+        tc, rud, cd, cc, tl, fl, oc, od
+      };
+      batch.set(fs.doc(db, 'otpreme', id), otp);
+      existingKeys.add(rowKey);
+      newCount++;
+      batchCount++;
+      // Firestore batch limit = 500
+      if (batchCount >= 490) break;
+    }
+
+    if (batchCount > 0) await batch.commit();
+
+    const now = new Date().toISOString();
+    await fbSetMeta('sync', { lastSync: now });
+    updateSyncStatus(now);
+    showToast(`✅ Sinkronizirano: ${newCount} novih otprema`, 'success');
+  } catch(e) {
+    console.error(e);
+    showToast('❌ Greška: ' + e.message, 'error');
+    document.getElementById('syncStatus').textContent = 'Greška!';
+  }
+  btn.classList.remove('loading');
+  spinner.style.display = 'none';
+}
+
+function findDispForKupac(kupacRaw, datumOtp) {
+  const ku = kupacRaw.toUpperCase().trim();
+  const candidates = dispozicije.filter(d => {
+    const dk = d.kupac.toUpperCase().trim();
+    return dk===ku || dk.includes(ku) || ku.includes(dk);
   });
-  const csv=rows.map(r=>r.join(';')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
-  a.download=`dispozicije_stanje_${new Date().toISOString().slice(0,10)}.csv`;
+  if (!candidates.length) return null;
+  const valid = candidates.filter(d => !d.datum || d.datum <= datumOtp);
+  if (!valid.length) return candidates[0];
+  return valid.sort((a,b)=>(b.datum||'').localeCompare(a.datum||''))[0];
+}
+
+function updateSyncStatus(iso) {
+  if (!iso) return;
+  const d = new Date(iso);
+  document.getElementById('syncStatus').textContent =
+    `Sinkr: ${d.toLocaleDateString('bs-BA')} ${d.toLocaleTimeString('bs-BA',{hour:'2-digit',minute:'2-digit'})}`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORT CSV
+// ═══════════════════════════════════════════════════════
+function exportCSV() {
+  const rows = [['KUPAC','BROJ','DATUM','UGOVOR',
+    'BAL_TC','BAL_RUD','BAL_CD','BAL_CC','BAL_TL','BAL_FL','BAL_OC','BAL_OD',
+    'ORIG_TC','ORIG_RUD','ORIG_CD','ORIG_CC','ORIG_TL','ORIG_FL','ORIG_OC','ORIG_OD']];
+  dispozicije.forEach(d => {
+    const bal = getBalance(d);
+    rows.push([d.kupac,d.broj,d.datum,d.ugovor,
+      ...FIELDS.map(f=>bal[f].toFixed(2)),
+      ...FIELDS.map(f=>(d[f]||0).toFixed(2))]);
+  });
+  const csv = rows.map(r=>r.join(';')).join('\n');
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download= `dispozicije_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
 }
 
-// ==================== UTILS ====================
+// ═══════════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════════
 function switchTab(t) {
-  const names=['pregled','nova','otprema','historija'];
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',names[i]===t));
-  document.querySelectorAll('.panel').forEach((el,i)=>el.classList.toggle('active',names[i]===t));
-  if(t==='pregled') renderPregled();
-  if(t==='nova') renderNova();
-  if(t==='otprema') renderOtprema();
+  const names = ['pregled','nova','otprema','historija'];
+  document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
+  document.querySelectorAll('.panel').forEach((el,i) => el.classList.toggle('active', names[i]===t));
+  if(t==='pregled')   renderPregled();
+  if(t==='nova')      renderNova();
+  if(t==='otprema')   renderOtprema();
   if(t==='historija') renderHistorija();
 }
 
 function renderAll() {
-  renderPregled();
+  const active = document.querySelector('.tab.active');
+  if (!active) return;
+  const idx = [...document.querySelectorAll('.tab')].indexOf(active);
+  const names = ['pregled','nova','otprema','historija'];
+  if (names[idx]==='pregled')   renderPregled();
+  if (names[idx]==='historija') renderHistorija();
 }
 
 let toastTimer;
 function showToast(msg, type='success') {
-  const t=document.getElementById('toast');
-  t.textContent=msg;
-  t.className='toast '+type+' show';
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = 'toast ' + type + ' show';
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show'),4000);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
 }
 
-// ==================== INIT ====================
-document.getElementById('dateBadge').textContent=new Date().toLocaleDateString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric'});
-loadStorage();
+// ═══════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('firebaseReady', initFirebase);
+// also try immediately in case event already fired
+if (window._firebaseReady) initFirebase();
 </script>
 </body>
 </html>
