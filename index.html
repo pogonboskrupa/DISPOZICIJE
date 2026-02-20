@@ -9,8 +9,16 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
-  getFirestore, collection, doc, getDocs, setDoc, deleteDoc,
-  onSnapshot, writeBatch, query, orderBy, serverTimestamp
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  query,
+  orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -24,13 +32,20 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const db  = getFirestore(app);
 
-// ─── expose to global scope ───────────────────────────────────────
+// expose everything to global scope so regular <script> can use it
 window._db = db;
-window._fs = {
-  collection, doc, getDocs, setDoc, deleteDoc,
-  onSnapshot, writeBatch, query, orderBy, serverTimestamp
+window._fb = {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  query,
+  orderBy
 };
 window._firebaseReady = true;
 window.dispatchEvent(new Event('firebaseReady'));
@@ -434,7 +449,7 @@ async function initFirebase() {
     return;
   }
   db = window._db;
-  fs = window._fs;
+  fs = window._fb;
 
   setLoader('Učitavanje dispozicija...');
 
@@ -456,13 +471,11 @@ async function initFirebase() {
     renderAll();
   });
 
-  fs.onSnapshot(
-    fs.query(fs.collection(db, 'otpreme'), fs.orderBy('datum', 'desc')),
-    snap => {
+  fs.onSnapshot(fs.collection(db, 'otpreme'), snap => {
       otpreme = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      otpreme.sort((a,b) => (b.datum||'').localeCompare(a.datum||''));
       renderAll();
-    }
-  );
+    });
 
   // ── meta: last sync time ──────────────────────────────
   try {
@@ -489,18 +502,23 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 //  FIRESTORE CRUD
 // ═══════════════════════════════════════════════════════
 async function fbSetDisp(d) {
+  if (!fs||!db) return;
   await fs.setDoc(fs.doc(db, 'dispozicije', d.id), d);
 }
 async function fbDelDisp(id) {
+  if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'dispozicije', id));
 }
 async function fbSetOtp(o) {
+  if (!fs||!db) return;
   await fs.setDoc(fs.doc(db, 'otpreme', o.id), o);
 }
 async function fbDelOtp(id) {
+  if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'otpreme', id));
 }
 async function fbSetMeta(key, data) {
+  if (!fs||!db) return;
   await fs.setDoc(fs.doc(db, 'meta', key), data);
 }
 
@@ -830,6 +848,7 @@ async function deleteOtp(id) {
 //  GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════════════
 async function syncSheet() {
+  if (!fs || !db) { showToast('Firebase nije spreman, sačekajte...', 'error'); return; }
   const btn     = document.getElementById('syncBtn');
   const spinner = document.getElementById('syncSpinner');
   btn.classList.add('loading');
