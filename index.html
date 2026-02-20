@@ -204,6 +204,9 @@ td.warn{color:var(--accent);font-weight:600;}
 .mob-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .mob-acts{margin-left:auto;display:flex;gap:6px;}
 
+/* Desktop toggle (hidden on desktop, shown on mobile via media query) */
+#desktopToggleWrap{display:none;}
+
 /* ── MOBILE BOTTOM NAV ── */
 .mobile-nav{display:none;}
 
@@ -242,9 +245,15 @@ td.warn{color:var(--accent);font-weight:600;}
   .stat .sv{font-size:17px;}
   .divider{display:none;}
 
-  /* Table → hide; show cards */
-  .table-wrap{display:none;}
-  .mob-list{display:block;}
+  /* Default mobile: desktop table (scrollable), cards skrivene */
+  .table-wrap{overflow-x:auto;display:block;}
+  .mob-list{display:none;}
+  /* Kad korisnik prebaci na cards mode */
+  body.mob-cards-mode .table-wrap{display:none;}
+  body.mob-cards-mode .mob-list{display:block;}
+
+  /* Desktop toggle - vidljiv samo na mobilnom */
+  #desktopToggleWrap{display:flex;}
 
   /* Search bar */
   .search-bar{flex-direction:column;align-items:stretch;gap:8px;}
@@ -311,6 +320,7 @@ td.warn{color:var(--accent);font-weight:600;}
       <input type="text" id="searchInput" placeholder="Pretraži po kupcu ili ugovoru..." oninput="renderPregled()">
       <button class="btn btn-ghost" onclick="exportCSV()">⬇ Export CSV</button>
       <label><input type="checkbox" id="showZero" onchange="renderPregled()"> Prikaži iscrpljene</label>
+      <label id="desktopToggleWrap"><input type="checkbox" id="desktopToggle" checked onchange="toggleDesktopView(this.checked)"> 🖥 Desktop</label>
     </div>
     <div id="pregledNaslov" style="font-size:17px;font-weight:700;text-align:center;padding:14px 0 6px;letter-spacing:1.5px;color:var(--text);text-transform:uppercase"></div>
     <div class="table-wrap">
@@ -766,6 +776,7 @@ function balStatus(disp) {
   if (rem < 0)             return 'over';
   if (rem / total <= 0.05) return 'done';
   if (rem / total <= 0.30) return 'low';
+  if (rem < 20) return 'low';
   return 'ok';
 }
 
@@ -1650,6 +1661,10 @@ function exportCSV() {
 // ═══════════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════════
+function toggleDesktopView(isDesktop) {
+  document.body.classList.toggle('mob-cards-mode', !isDesktop);
+}
+
 function switchTab(t) {
   const names = ['pregled','nova','otprema','historija'];
   document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
