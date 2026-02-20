@@ -190,6 +190,83 @@ td.warn{color:var(--accent);font-weight:600;}
 .sortable:hover{color:var(--accent)!important;}
 .sortable.sort-asc::after{content:' ▲';font-size:10px;opacity:.8;}
 .sortable.sort-desc::after{content:' ▼';font-size:10px;opacity:.8;}
+
+/* ── MOBILE CARDS ── */
+.mob-list{display:none;}
+.mob-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;}
+.mob-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.mob-kupac{font-family:'Syne',sans-serif;font-weight:800;font-size:15px;color:var(--text);}
+.mob-meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:9px;}
+.mob-vals{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
+.mob-val{background:var(--surface2);border-radius:6px;padding:7px 10px;}
+.mob-val .mvl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.mob-val .mvv{font-size:16px;font-weight:700;margin-top:2px;}
+.mob-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.mob-acts{margin-left:auto;display:flex;gap:6px;}
+
+/* ── MOBILE BOTTOM NAV ── */
+.mobile-nav{display:none;}
+
+/* ══ RESPONSIVE ══ */
+@media (max-width: 767px) {
+  /* Header */
+  header{padding:10px 14px;gap:8px;}
+  header h1{font-size:15px;}
+  header .sub{display:none;}
+  .sync-btn{padding:7px 11px;font-size:12px;}
+  .date-badge{font-size:12px;padding:5px 9px;}
+  .sync-status{display:none;}
+
+  /* Main layout */
+  main{padding:12px 12px 78px;}
+
+  /* Hide desktop tabs, show mobile nav */
+  .tabs{display:none;}
+  .mobile-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;
+    background:var(--surface);border-top:2px solid var(--border);
+    z-index:100;height:62px;
+  }
+  .mnav-btn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;background:none;border:none;color:var(--muted);cursor:pointer;
+    font-family:'Syne',sans-serif;padding:5px 2px;transition:color .15s;
+  }
+  .mnav-btn .mni{font-size:20px;line-height:1;}
+  .mnav-btn .mnl{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+  .mnav-btn.active{color:var(--accent);}
+  .mnav-btn.active .mni{filter:drop-shadow(0 0 4px var(--accent));}
+
+  /* Status bar */
+  .status-bar{gap:10px;padding:10px 12px;overflow-x:auto;flex-wrap:nowrap;}
+  .stat .sv{font-size:17px;}
+  .divider{display:none;}
+
+  /* Table → hide; show cards */
+  .table-wrap{display:none;}
+  .mob-list{display:block;}
+
+  /* Search bar */
+  .search-bar{flex-direction:column;align-items:stretch;gap:8px;}
+  .search-bar input{width:100%;}
+  .search-bar .btn{width:100%;}
+
+  /* Modals: bottom sheet */
+  .modal-bg{align-items:flex-end;}
+  .modal{width:100%!important;max-width:100%!important;border-radius:16px 16px 0 0;max-height:92vh;padding:20px 16px 28px;}
+  .modal h3{font-size:16px;}
+
+  /* Forms */
+  .form-section{padding:14px;}
+  .form-grid{grid-template-columns:1fr!important;}
+  .form-group[style*="span 2"]{grid-column:span 1!important;}
+
+  /* Toast above nav */
+  .toast{left:12px;right:12px;bottom:70px;}
+
+  /* Historija cards */
+  .otprema-card{padding:12px 14px;gap:10px;}
+}
 </style>
 </head>
 <body>
@@ -261,6 +338,8 @@ td.warn{color:var(--accent);font-weight:600;}
         <tbody id="pregledBody"></tbody>
       </table>
     </div>
+    <!-- Mobile card list (visible only on mobile) -->
+    <div id="mob-list" class="mob-list"></div>
   </div>
 
   <!-- NOVA DISPOZICIJA -->
@@ -452,6 +531,25 @@ td.warn{color:var(--accent);font-weight:600;}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav class="mobile-nav" id="mobileNav">
+  <button class="mnav-btn active" data-tab="pregled" onclick="switchTab('pregled')">
+    <span class="mni">📋</span><span class="mnl">Pregled</span>
+  </button>
+  <button class="mnav-btn" data-tab="nova" onclick="switchTab('nova')">
+    <span class="mni">➕</span><span class="mnl">Nova</span>
+  </button>
+  <button class="mnav-btn" onclick="syncSheet()">
+    <span class="mni">🔄</span><span class="mnl">Otprema</span>
+  </button>
+  <button class="mnav-btn" data-tab="otprema" onclick="switchTab('otprema')">
+    <span class="mni">🚛</span><span class="mnl">Ručno</span>
+  </button>
+  <button class="mnav-btn" data-tab="historija" onclick="switchTab('historija')">
+    <span class="mni">📜</span><span class="mnl">Historija</span>
+  </button>
+</nav>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -811,6 +909,51 @@ function renderPregled() {
 
   body.innerHTML = html ||
     `<tr><td colspan="14"><div class="empty-state"><div class="big">📭</div><p>Nema dispozicija</p></div></td></tr>`;
+
+  // ── Mobile card view ──────────────────────────────────
+  let mhtml = '';
+  kupciKeys.forEach(kupac => {
+    grouped[kupac].forEach(d => {
+      const bal    = getBalance(d);
+      const st     = balStatus(d);
+      const oCount = otpreme.filter(o => o.disp_id === d.id).length;
+      const nonZero = FIELDS.filter(f => d[f]);
+      const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('.') + '.' + d.datum.slice(2,4) : '—';
+      mhtml += `<div class="mob-card">
+        <div class="mob-head">
+          <div class="mob-kupac">${kupac}</div>
+          <div style="font-size:13px;font-weight:700;${datumColor(d.datum)}">${datFmt}</div>
+        </div>
+        <div class="mob-meta">
+          <span>${d.broj||'—'}</span>
+          ${d.ugovor ? `<span style="opacity:.7">${d.ugovor}</span>` : ''}
+        </div>
+        ${nonZero.length ? `<div class="mob-vals">${nonZero.map(f => {
+          const v = parseFloat(bal[f].toFixed(2));
+          const o = parseFloat((d[f]||0).toFixed(2));
+          const cls = v<0 ? 'neg' : v<o*0.2 ? 'warn' : 'pos';
+          const pct = Math.max(0, Math.min(100, o>0 ? v/o*100 : 0));
+          const bc  = v<0 ? 'prog-neg' : v<o*0.2 ? 'prog-warn' : 'prog-ok';
+          return `<div class="mob-val">
+            <div class="mvl">${FL[f]}</div>
+            <div class="mvv ${cls}">${v}</div>
+            <div class="prog-wrap"><div class="prog-bar ${bc}" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}</div>` : ''}
+        <div class="mob-foot">
+          ${stChips[st]||''}
+          ${oCount>0 ? `<span style="font-size:11px;color:var(--muted)">(${oCount} otp.)</span>` : ''}
+          <div class="mob-acts">
+            <button class="edit-disp-btn" onclick="editDisp('${d.id}')">✏️ Edit</button>
+            <button class="del-disp-btn" onclick="deleteDisp('${d.id}')">🗑</button>
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+  const mobList = document.getElementById('mob-list');
+  if (mobList) mobList.innerHTML = mhtml || '<div class="empty-state"><div class="big">📭</div><p>Nema dispozicija</p></div>';
+
   renderStatusBar();
 }
 
@@ -1511,6 +1654,7 @@ function switchTab(t) {
   const names = ['pregled','nova','otprema','historija'];
   document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.panel').forEach((el,i) => el.classList.toggle('active', names[i]===t));
+  document.querySelectorAll('.mnav-btn[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===t));
   if(t==='pregled')   renderPregled();
   if(t==='nova')      renderNova();
   if(t==='otprema')   renderOtprema();
