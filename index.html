@@ -208,9 +208,6 @@ td.warn{color:var(--accent);font-weight:600;}
       <span class="spinner-sm" id="syncSpinner" style="display:none"></span>
       🔄 Sinkroniziraj Sheet
     </button>
-    <button class="sync-btn" style="border-color:var(--red);color:var(--red)" onclick="resetSheetOtpreme()">
-      🗑 Resetuj Sheet otpreme
-    </button>
     <div class="date-badge" id="dateBadge"></div>
   </div>
 </header>
@@ -848,28 +845,7 @@ async function deleteOtp(id) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  RESET SHEET OTPREME (briše sve uvezene iz Sheeta)
-// ═══════════════════════════════════════════════════════
-async function resetSheetOtpreme() {
-  const sheetCount = otpreme.filter(o => o.source === 'sheet').length;
-  if (sheetCount === 0) { showToast('Nema otprema iz Sheeta za brisanje.', 'error'); return; }
-  if (!confirm(`Obrisati SVE otpreme uvezene iz Google Sheets (${sheetCount} zapisa)?\n\nNakon ovoga možete ponovo sinkronizirati ispravno.`)) return;
-
-  if (!fs || !db) return;
-  const toDelete = otpreme.filter(o => o.source === 'sheet');
-  // Delete in batches of 490
-  for (let i = 0; i < toDelete.length; i += 490) {
-    const batch = fs.writeBatch(db);
-    toDelete.slice(i, i + 490).forEach(o => {
-      batch.delete(fs.doc(db, 'otpreme', o.id));
-    });
-    await batch.commit();
-  }
-  showToast(`✅ Obrisano ${sheetCount} otprema iz Sheeta. Sada možete ponovo sinkronizirati.`, 'success');
-}
-
-// ═══════════════════════════════════════════════════════
-//  GOOGLE SHEETS SYNC
+//  GOOGLE SHEETS SYNC  – pametno raspoređivanje po dispozicijama
 // ═══════════════════════════════════════════════════════
 async function syncSheet() {
   if (!fs || !db) { showToast('Firebase nije spreman, sačekajte...', 'error'); return; }
@@ -877,13 +853,14 @@ async function syncSheet() {
   // Only import rows with datum STRICTLY BEFORE today
   const today = new Date();
   today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10); // YYYY-MM-DD
+  const todayStr = today.toISOString().slice(0,10);
 
   const btn     = document.getElementById('syncBtn');
   const spinner = document.getElementById('syncSpinner');
   btn.classList.add('loading');
   spinner.style.display = 'inline-block';
   document.getElementById('syncStatus').textContent = 'Sinkroniziram...';
+
   try {
     const url  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
     const res  = await fetch(url);
@@ -891,102 +868,198 @@ async function syncSheet() {
     const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
     const rows = json.table.rows;
     const cols = json.table.cols;
+
+    // ── build column index by label ──────────────────────
     const colIdx = {};
     cols.forEach((c,i) => { if(c.label) colIdx[c.label.trim().toUpperCase()] = i; });
 
     const cv = (row, lbl) => {
-      const i = colIdx[lbl]; if(i===undefined||!row.c[i]) return 0;
-      const v = row.c[i].v; return typeof v==='number' ? v : (parseFloat(v)||0);
+      const i = colIdx[lbl];
+      if (i === undefined || !row.c[i] || row.c[i].v === null) return 0;
+      const v = row.c[i].v;
+      return typeof v === 'number' ? v : (parseFloat(String(v).replace(',','.')) || 0);
     };
     const cs = (row, lbl) => {
-      const i = colIdx[lbl]; if(i===undefined||!row.c[i]) return '';
-      return String(row.c[i].v||'').trim();
+      const i = colIdx[lbl];
+      if (i === undefined || !row.c[i]) return '';
+      return String(row.c[i].v || '').trim();
     };
     const getDate = row => {
-      const i = colIdx['DATUM']; if(i===undefined||!row.c[i]) return '';
+      const i = colIdx['DATUM'];
+      if (i === undefined || !row.c[i]) return '';
       const cell = row.c[i];
-      if (cell.v && typeof cell.v==='string' && cell.v.startsWith('Date(')) {
+      // GViz Date object format: Date(year, month0indexed, day)
+      if (cell.v && typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
         const m = cell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
         if (m) return `${m[1]}-${String(parseInt(m[2])+1).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
       }
+      // Formatted string like "20.2.2026" or "2/20/2026"
       if (cell.f) {
-        const p = cell.f.split(/[.\-\/]/).map(x=>x.trim());
-        if (p.length===3 && p[2].length===4) return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+        const p = cell.f.split(/[.\-\/]/).map(x => x.trim());
+        if (p.length === 3 && p[2].length === 4)
+          return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
       }
-      return cell.f || String(cell.v||'');
+      return cell.f || String(cell.v || '');
     };
 
-    // Build set of existing sheet_keys to avoid duplicates
-    const existingKeys = new Set(otpreme.filter(o=>o.sheet_key).map(o=>o.sheet_key));
+    // ── existing keys to avoid double import ─────────────
+    const existingKeys = new Set(otpreme.filter(o => o.sheet_key).map(o => o.sheet_key));
 
-    let newCount = 0;
-    const batch = fs.writeBatch(db);
-    let batchCount = 0;
+    let newCount  = 0;
+    let batchDocs = [];  // collect {id, data} pairs, commit at end
 
     for (const row of rows) {
-      const kupacRaw = cs(row,'KUPAC'); if(!kupacRaw) continue;
-      const datum    = getDate(row);
-      const tc  = cv(row,'TRUPCI Č');
-      const rud = cv(row,'RD');
-      const cd  = cv(row,'CEL.DUGA');
-      const cc  = cv(row,'CEL.CIJEPANA');
-      const tl  = cv(row,'TRUPCI L');
-      const fl  = cv(row,'F/L L');
-      const oc  = cv(row,'OGR.CIJEPANI');
-      const od  = cv(row,'OGR.DUGI');
-      if (tc+rud+cd+cc+tl+fl+oc+od === 0) continue;
+      const kupacRaw = cs(row, 'KUPAC');
+      if (!kupacRaw) continue;
 
-      const rowKey = `sheet_${datum}_${kupacRaw}_${tc}_${tl}`;
-      if (existingKeys.has(rowKey)) continue;
+      const datum = getDate(row);
+      if (!datum) continue;
 
-      // Skip today and future – only import past dates
+      // Skip today and future
       if (datum >= todayStr) continue;
 
-      const matchDisp = findDispForKupac(kupacRaw, datum);
-      const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
-      const otp = {
-        id, sheet_key: rowKey, source:'sheet',
-        kupac: kupacRaw,
-        disp_id:   matchDisp ? matchDisp.id : null,
-        unmatched: !matchDisp,
-        datum, broj: cs(row,'OTPREMAČ')||'',
-        tc, rud, cd, cc, tl, fl, oc, od
+      // Read all quantities from sheet row
+      const qtyRow = {
+        tc:  cv(row, 'TRUPCI Č'),
+        rud: cv(row, 'RD'),
+        cd:  cv(row, 'CEL.DUGA'),
+        cc:  cv(row, 'CEL.CIJEPANA'),
+        tl:  cv(row, 'TRUPCI L'),
+        fl:  cv(row, 'F/L L'),
+        oc:  cv(row, 'OGR.CIJEPANI'),
+        od:  cv(row, 'OGR.DUGI'),
       };
-      batch.set(fs.doc(db, 'otpreme', id), otp);
-      existingKeys.add(rowKey);
-      newCount++;
-      batchCount++;
-      // Firestore batch limit = 500
-      if (batchCount >= 490) break;
-    }
 
-    if (batchCount > 0) await batch.commit();
+      const totalQty = FIELDS.reduce((s,f) => s + qtyRow[f], 0);
+      if (totalQty === 0) continue;
+
+      // Unique key for this sheet row
+      const rowKey = `sheet_${datum}_${kupacRaw}_${FIELDS.map(f=>qtyRow[f]).join('_')}`;
+      if (existingKeys.has(rowKey)) continue;
+      existingKeys.add(rowKey);
+
+      // ── Find dispozicije for this kupac ordered oldest first ──
+      const ku = kupacRaw.toUpperCase().trim();
+      const kandidati = dispozicije
+        .filter(d => {
+          const dk = d.kupac.toUpperCase().trim();
+          return dk === ku || dk.includes(ku) || ku.includes(dk);
+        })
+        .filter(d => !d.datum || d.datum <= datum)  // dispozicija mora biti prije otpreme
+        .sort((a,b) => (a.datum||'').localeCompare(b.datum||'')); // NAJSTARIJA PRVA
+
+      if (kandidati.length === 0) {
+        // No matching dispozicija – save as unmatched single record
+        const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+        batchDocs.push({
+          id,
+          data: {
+            id, sheet_key: rowKey, source: 'sheet',
+            kupac: kupacRaw, disp_id: null, unmatched: true,
+            datum, broj: cs(row, 'OTPREMAČ') || '',
+            ...qtyRow
+          }
+        });
+        newCount++;
+        continue;
+      }
+
+      // ── Smart split: distribute each field across dispozicije oldest→newest ──
+      // We compute remaining balance for each dispozicija at the time of this import
+      // and distribute the quantity accordingly
+
+      // Build a map of disp_id → already-committed quantities in this sync batch
+      // (since we might create multiple otprema records per sync run)
+      const batchSpent = {}; // disp_id -> {tc,rud,...}
+
+      // For each field, split across dispozicije
+      // result: array of { disp_id, qty_per_field }
+      const splits = {}; // disp_id -> { tc,rud,cd,cc,tl,fl,oc,od }
+
+      for (const field of FIELDS) {
+        let remaining = qtyRow[field];
+        if (remaining <= 0) continue;
+
+        for (const disp of kandidati) {
+          if (remaining <= 0) break;
+          const bal = getBalance(disp);
+          // Subtract anything we've already allocated in this batch
+          const alreadySpent = (batchSpent[disp.id] || {})[field] || 0;
+          const available = Math.max(0, bal[field] - alreadySpent);
+          if (available <= 0) continue;
+
+          const take = Math.min(remaining, available);
+          if (!splits[disp.id]) splits[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          splits[disp.id][field] = (splits[disp.id][field] || 0) + take;
+
+          // Track batch spend
+          if (!batchSpent[disp.id]) batchSpent[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          batchSpent[disp.id][field] = (batchSpent[disp.id][field] || 0) + take;
+
+          remaining -= take;
+        }
+
+        // If still remaining after all dispozicije – add to last one (overflow)
+        if (remaining > 0) {
+          const lastDisp = kandidati[kandidati.length - 1];
+          if (!splits[lastDisp.id]) splits[lastDisp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          splits[lastDisp.id][field] = (splits[lastDisp.id][field] || 0) + remaining;
+        }
+      }
+
+      // ── Create one Firestore record per dispozicija used ──
+      const dispIds = Object.keys(splits);
+      for (const disp_id of dispIds) {
+        const fieldQtys = splits[disp_id];
+        const fieldTotal = FIELDS.reduce((s,f) => s + fieldQtys[f], 0);
+        if (fieldTotal <= 0) continue;
+
+        const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+        batchDocs.push({
+          id,
+          data: {
+            id,
+            sheet_key: dispIds.length === 1 ? rowKey : `${rowKey}_${disp_id}`,
+            source: 'sheet',
+            kupac: kupacRaw,
+            disp_id,
+            unmatched: false,
+            datum,
+            broj: cs(row, 'OTPREMAČ') || '',
+            ...fieldQtys
+          }
+        });
+        newCount++;
+      }
+    } // end for rows
+
+    // ── Commit all to Firestore in batches of 490 ────────
+    for (let i = 0; i < batchDocs.length; i += 490) {
+      const batch = fs.writeBatch(db);
+      batchDocs.slice(i, i + 490).forEach(({ id, data }) => {
+        batch.set(fs.doc(db, 'otpreme', id), data);
+      });
+      await batch.commit();
+    }
 
     const now = new Date().toISOString();
     await fbSetMeta('sync', { lastSync: now });
     updateSyncStatus(now);
-    showToast(`✅ Sinkronizirano: ${newCount} novih otprema`, 'success');
+    showToast(`✅ Sinkronizirano: ${newCount} novih zapisa (do ${todayStr})`, 'success');
+
   } catch(e) {
     console.error(e);
     showToast('❌ Greška: ' + e.message, 'error');
     document.getElementById('syncStatus').textContent = 'Greška!';
   }
+
   btn.classList.remove('loading');
   spinner.style.display = 'none';
 }
 
-function findDispForKupac(kupacRaw, datumOtp) {
-  const ku = kupacRaw.toUpperCase().trim();
-  const candidates = dispozicije.filter(d => {
-    const dk = d.kupac.toUpperCase().trim();
-    return dk===ku || dk.includes(ku) || ku.includes(dk);
-  });
-  if (!candidates.length) return null;
-  const valid = candidates.filter(d => !d.datum || d.datum <= datumOtp);
-  if (!valid.length) return candidates[0];
-  return valid.sort((a,b)=>(b.datum||'').localeCompare(a.datum||''))[0];
-}
-
+// ═══════════════════════════════════════════════════════
+//  EXPORT CSV – helper
+// ═══════════════════════════════════════════════════════
 function updateSyncStatus(iso) {
   if (!iso) return;
   const d = new Date(iso);
