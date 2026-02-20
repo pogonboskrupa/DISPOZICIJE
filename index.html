@@ -208,6 +208,9 @@ td.warn{color:var(--accent);font-weight:600;}
       <span class="spinner-sm" id="syncSpinner" style="display:none"></span>
       🔄 Sinkroniziraj Sheet
     </button>
+    <button class="sync-btn" style="border-color:var(--red);color:var(--red)" onclick="resetSheetOtpreme()">
+      🗑 Resetuj Sheet otpreme
+    </button>
     <div class="date-badge" id="dateBadge"></div>
   </div>
 </header>
@@ -845,10 +848,37 @@ async function deleteOtp(id) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  RESET SHEET OTPREME (briše sve uvezene iz Sheeta)
+// ═══════════════════════════════════════════════════════
+async function resetSheetOtpreme() {
+  const sheetCount = otpreme.filter(o => o.source === 'sheet').length;
+  if (sheetCount === 0) { showToast('Nema otprema iz Sheeta za brisanje.', 'error'); return; }
+  if (!confirm(`Obrisati SVE otpreme uvezene iz Google Sheets (${sheetCount} zapisa)?\n\nNakon ovoga možete ponovo sinkronizirati ispravno.`)) return;
+
+  if (!fs || !db) return;
+  const toDelete = otpreme.filter(o => o.source === 'sheet');
+  // Delete in batches of 490
+  for (let i = 0; i < toDelete.length; i += 490) {
+    const batch = fs.writeBatch(db);
+    toDelete.slice(i, i + 490).forEach(o => {
+      batch.delete(fs.doc(db, 'otpreme', o.id));
+    });
+    await batch.commit();
+  }
+  showToast(`✅ Obrisano ${sheetCount} otprema iz Sheeta. Sada možete ponovo sinkronizirati.`, 'success');
+}
+
+// ═══════════════════════════════════════════════════════
 //  GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════════════
 async function syncSheet() {
   if (!fs || !db) { showToast('Firebase nije spreman, sačekajte...', 'error'); return; }
+
+  // Only import rows with datum STRICTLY BEFORE today
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10); // YYYY-MM-DD
+
   const btn     = document.getElementById('syncBtn');
   const spinner = document.getElementById('syncSpinner');
   btn.classList.add('loading');
@@ -908,6 +938,9 @@ async function syncSheet() {
 
       const rowKey = `sheet_${datum}_${kupacRaw}_${tc}_${tl}`;
       if (existingKeys.has(rowKey)) continue;
+
+      // Skip today and future – only import past dates
+      if (datum >= todayStr) continue;
 
       const matchDisp = findDispForKupac(kupacRaw, datum);
       const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
