@@ -681,6 +681,21 @@ function isRecentlyExhausted(disp) {
 // ═══════════════════════════════════════════════════════
 //  RENDER – PREGLED
 // ═══════════════════════════════════════════════════════
+function datumAge(datumStr) {
+  if (!datumStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(datumStr); d.setHours(0,0,0,0);
+  return Math.round((today - d) / 86400000);
+}
+function datumColor(datumStr) {
+  const age = datumAge(datumStr);
+  if (age === null) return '';
+  if (age <= 7)  return 'color:#22c55e;font-weight:700';   // zelena
+  if (age <= 14) return 'color:#3b82f6;font-weight:700';   // plava
+  if (age <= 21) return 'color:#a855f7;font-weight:700';   // ljubičasta
+  return                 'color:#ef4444;font-weight:700';   // crvena
+}
+
 function fmtBal(bal, orig) {
   const v = parseFloat(bal.toFixed(2));
   const o = parseFloat((orig||0).toFixed(2));
@@ -758,7 +773,7 @@ function renderPregled() {
       html += `<tr>
         <td class="kupac">${i===0 ? kupac : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
-        <td style="font-size:15px">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
+        <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
         <td style="font-size:15px;color:var(--muted)">${d.ugovor||''}</td>
         <td style="border-left:2px solid var(--border)">${d.tc  ? fmtBal(bal.tc,  d.tc)  : ''}</td>
         <td>${d.rud ? fmtBal(bal.rud, d.rud) : ''}</td>
