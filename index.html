@@ -379,7 +379,14 @@ td.warn{color:var(--accent);font-weight:600;}
       Označi datume čije otpreme želiš preuzeti iz <strong>INDEKS_OTPREMA</strong>.
     </p>
     <div id="syncDateList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px"></div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+    <label id="syncTodayRow" style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:8px">
+      <input type="checkbox" id="syncTodayCheck" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
+      <span style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px">
+        Danas <em id="syncTodayDate" style="font-size:11px;font-weight:400;color:var(--accent)"></em>
+      </span>
+      <span id="syncTodayStatus" style="margin-left:auto;font-size:12px;color:var(--muted)"></span>
+    </label>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);margin-top:8px">
       <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600">Drugi datum:</label>
       <input type="text" id="syncCustomDate" placeholder="dd.mm.yyyy" maxlength="10"
         style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace;letter-spacing:1px">
@@ -520,6 +527,11 @@ function setLoader(msg) {
   document.getElementById('loaderMsg').textContent = msg;
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+// Lokalni datum YYYY-MM-DD (izbjegava UTC pomak toISOString)
+function localDateStr(date) {
+  const d = (date instanceof Date) ? date : new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // ═══════════════════════════════════════════════════════
 //  FIRESTORE CRUD
@@ -550,7 +562,7 @@ async function fbSetMeta(key, data) {
 // ═══════════════════════════════════════════════════════
 function getBalance(disp) {
   const _today = new Date(); _today.setHours(0,0,0,0);
-  const _todayStr = _today.toISOString().slice(0,10);
+  const _todayStr = localDateStr(_today);
   const spent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   otpreme
     .filter(o => o.disp_id === disp.id && (!o.datum || o.datum < _todayStr))
@@ -671,7 +683,7 @@ function renderStatusBar() {
   let orig={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   let spnt={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   const _sbToday = new Date(); _sbToday.setHours(0,0,0,0);
-  const _sbTodayStr = _sbToday.toISOString().slice(0,10);
+  const _sbTodayStr = localDateStr(_sbToday);
   dispozicije.forEach(d => FIELDS.forEach(f => orig[f]+=(d[f]||0)));
   otpreme.filter(o => !o.datum || o.datum < _sbTodayStr)
          .forEach(o => FIELDS.forEach(f => spnt[f]+=(o[f]||0)));
@@ -703,7 +715,7 @@ function renderNova() {
   const dl    = document.getElementById('kupciList');
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
   if (dl) dl.innerHTML = kupci.map(k=>`<option value="${k}">`).join('');
-  document.getElementById('n_datum').value = new Date().toISOString().slice(0,10);
+  document.getElementById('n_datum').value = localDateStr();
 }
 
 async function addDispozicija() {
@@ -733,7 +745,7 @@ async function addDispozicija() {
 function clearNovaForm() {
   ['n_kupac','n_broj','n_ugovor','n_tc','n_rud','n_cd','n_cc','n_tl','n_fl','n_oc','n_od']
     .forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('n_datum').value = new Date().toISOString().slice(0,10);
+  document.getElementById('n_datum').value = localDateStr();
 }
 
 async function deleteDisp(id) {
@@ -750,7 +762,7 @@ function renderOtprema() {
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].sort();
   sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
     kupci.map(k=>`<option value="${k}">${k}</option>`).join('');
-  document.getElementById('o_datum').value = new Date().toISOString().slice(0,10);
+  document.getElementById('o_datum').value = localDateStr();
 }
 
 function loadKupacDisp() {
@@ -843,7 +855,7 @@ function clearOtprema() {
   document.getElementById('o_kupac').value = '';
   document.getElementById('o_disp').innerHTML = '<option value="">— Odaberi dispoziciju —</option>';
   document.getElementById('o_broj').value = '';
-  document.getElementById('o_datum').value = new Date().toISOString().slice(0,10);
+  document.getElementById('o_datum').value = localDateStr();
   FIELDS.forEach(f => document.getElementById('o_'+f).value = '');
   document.getElementById('availWrap').style.display = 'none';
   document.getElementById('oWarn').textContent = '';
@@ -920,7 +932,7 @@ async function syncSheet() {
   if (!fs || !db) { showToast('Firebase nije spreman, sačekajte...', 'error'); return; }
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10);
+  const todayStr = localDateStr(today);
 
   const btn     = document.getElementById('syncBtn');
   const spinner = document.getElementById('syncSpinner');
@@ -982,7 +994,7 @@ async function syncSheet() {
     const last5 = [];
     for (let i = 0; i < 5; i++) {
       const d = new Date(today.getTime() - i * 86400000);
-      last5.push(d.toISOString().slice(0, 10));
+      last5.push(localDateStr(d));
     }
 
     const list = document.getElementById('syncDateList');
@@ -1000,6 +1012,24 @@ async function syncSheet() {
         ${count === 0 ? '<span style="margin-left:auto;font-size:11px;color:var(--muted)">nema u sheet-u</span>' : ''}
       </label>`;
     }).join('');
+
+    // Postavi "Danas" opciju
+    const todayAlreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === todayStr);
+    const todayCount = dateCountMap[todayStr] || 0;
+    const [ty, tm, tday] = todayStr.split('-');
+    document.getElementById('syncTodayDate').textContent = `${tday}.${tm}.${ty}`;
+    document.getElementById('syncTodayCheck').checked = !todayAlreadyDone;
+    const todayStatus = document.getElementById('syncTodayStatus');
+    if (todayAlreadyDone) {
+      todayStatus.textContent = '✓ uvezeno';
+      todayStatus.style.color = '#4caf50';
+    } else if (todayCount > 0) {
+      todayStatus.textContent = `${todayCount} stavki`;
+      todayStatus.style.color = 'var(--muted)';
+    } else {
+      todayStatus.textContent = 'nema u sheet-u';
+      todayStatus.style.color = 'var(--muted)';
+    }
 
     // Clear custom input
     document.getElementById('syncCustomDate').value = '';
@@ -1027,6 +1057,9 @@ async function doSync() {
 
   const checked = [...document.querySelectorAll('#syncDateList input[type=checkbox]:checked')]
                     .map(cb => cb.value);
+  if (document.getElementById('syncTodayCheck')?.checked) {
+    checked.push(todayStr);
+  }
   const customRaw = document.getElementById('syncCustomDate').value.trim();
   if (customRaw) {
     const cm = customRaw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
