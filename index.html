@@ -351,6 +351,7 @@ td.warn{color:var(--accent);font-weight:600;}
       <input type="text" id="hSearch" placeholder="Pretraži po kupcu, datumu..." oninput="renderHistorija()">
       <label><input type="checkbox" id="hOnlySheet" onchange="renderHistorija()"> Samo iz Google Sheets</label>
       <label><input type="checkbox" id="hOnlyManual" onchange="renderHistorija()"> Samo ručne</label>
+      <button class="btn btn-danger" id="btnDeleteAll" onclick="deleteAllOtp()" style="margin-left:auto">🗑 Obriši sve</button>
     </div>
     <div id="historijaList"></div>
   </div>
@@ -847,6 +848,23 @@ async function deleteOtp(id) {
   if (!confirm('Storni ovu otpremu? Dispozicija će biti vraćena.')) return;
   await fbDelOtp(id);
   showToast('Otprema stornirana','success');
+}
+
+async function deleteAllOtp() {
+  const search     = (document.getElementById('hSearch')?.value||'').toLowerCase();
+  const onlySheet  = document.getElementById('hOnlySheet')?.checked;
+  const onlyManual = document.getElementById('hOnlyManual')?.checked;
+  const filtered = otpreme.filter(o => {
+    if (onlySheet  && o.source!=='sheet') return false;
+    if (onlyManual && o.source==='sheet') return false;
+    return o.kupac.toLowerCase().includes(search) ||
+           (o.broj||'').toLowerCase().includes(search) ||
+           (o.datum||'').includes(search);
+  });
+  if (!filtered.length) { showToast('Nema stavki za brisanje', 'error'); return; }
+  if (!confirm(`Obrisati svih ${filtered.length} otprema? Dispozicije će biti vraćene.`)) return;
+  await Promise.all(filtered.map(o => fbDelOtp(o.id)));
+  showToast(`Obrisano ${filtered.length} otprema`, 'success');
 }
 
 // ═══════════════════════════════════════════════════════
