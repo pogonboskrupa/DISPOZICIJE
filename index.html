@@ -176,6 +176,8 @@ td.warn{color:var(--accent);font-weight:600;}
 .empty-state p{font-family:'Syne',sans-serif;font-size:14px;}
 .del-disp-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:3px 8px;border-radius:4px;transition:all .1s;}
 .del-disp-btn:hover{color:var(--red);}
+.edit-disp-btn{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;font-size:12px;padding:3px 9px;border-radius:4px;transition:all .1s;font-family:'Syne',sans-serif;font-weight:600;}
+.edit-disp-btn:hover{border-color:var(--accent);color:var(--accent);}
 .spinner-sm{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 20px;font-size:14px;z-index:999;transform:translateY(60px);opacity:0;transition:all .3s;}
 .toast.show{transform:translateY(0);opacity:1;}
@@ -375,6 +377,51 @@ td.warn{color:var(--accent);font-weight:600;}
     <div style="display:flex;gap:10px;">
       <button class="btn btn-success" onclick="confirmOtprema()">✅ Potvrdi</button>
       <button class="btn btn-ghost" onclick="closeModal()">Odustani</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT DISPOZICIJA MODAL -->
+<div class="modal-bg" id="editModal">
+  <div class="modal" style="max-width:700px">
+    <h3>✏️ Uredi dispoziciju</h3>
+    <input type="hidden" id="e_id">
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="form-group" style="grid-column:span 2">
+        <label>Kupac *</label>
+        <input type="text" id="e_kupac" list="editKupciList">
+        <datalist id="editKupciList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>Broj dispozicije *</label>
+        <input type="text" id="e_broj">
+      </div>
+      <div class="form-group">
+        <label>Datum</label>
+        <input type="date" id="e_datum">
+      </div>
+      <div class="form-group" style="grid-column:span 2">
+        <label>Ugovor</label>
+        <input type="text" id="e_ugovor">
+      </div>
+    </div>
+    <div class="section-label">🌲 ČETINARI</div>
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="e_tc" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Rudno / RD (m³)</label><input type="number" id="e_rud" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="e_cd" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="e_cc" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="section-label">🍂 LIŠĆARI</div>
+    <div class="form-grid" style="margin-bottom:18px">
+      <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="e_tl" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>F/L L (m³)</label><input type="number" id="e_fl" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="e_oc" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="e_od" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="saveDisp()">💾 Spremi promjene</button>
+      <button class="btn btn-ghost" onclick="closeEditModal()">Odustani</button>
     </div>
   </div>
 </div>
@@ -606,6 +653,13 @@ function balStatus(disp) {
   return 'ok';
 }
 
+// Provjeri je li dispozicija iscrpljena unutar zadnjih 24h
+function isRecentlyExhausted(disp) {
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = localDateStr(yesterday);
+  return otpreme.some(o => o.disp_id === disp.id && (o.datum||'') >= yesterdayStr);
+}
+
 // ═══════════════════════════════════════════════════════
 //  RENDER – PREGLED
 // ═══════════════════════════════════════════════════════
@@ -643,7 +697,11 @@ function renderPregled() {
         !(d.ugovor||'').toLowerCase().includes(search) &&
         !(d.broj||'').toLowerCase().includes(search)) return;
     const st = balStatus(d);
-    if (!showZero && st === 'done' && FIELDS.reduce((s,f)=>s+(d[f]||0),0)===0) return;
+    if (!showZero) {
+      if (st === 'empty') return;
+      if (st === 'done' && !isRecentlyExhausted(d)) return; // sakrij iscrpljene starije od 24h
+      // 'over' uvijek prikaži dok minus nije pokriven
+    }
     (grouped[d.kupac] = grouped[d.kupac]||[]).push(d);
   });
 
@@ -693,7 +751,10 @@ function renderPregled() {
         <td>${d.oc  ? fmtBal(bal.oc,  d.oc)  : ''}</td>
         <td>${d.od  ? fmtBal(bal.od,  d.od)  : ''}</td>
         <td>${stChips[st]||''} ${oCount>0?`<span style="font-size:11px;color:var(--muted)">(${oCount} otp.)</span>`:''}</td>
-        <td><button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši">🗑</button></td>
+        <td style="white-space:nowrap">
+          <button class="edit-disp-btn" onclick="editDisp('${d.id}')" title="Uredi">✏️ Edit</button>
+          <button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši">🗑</button>
+        </td>
       </tr>`;
       FIELDS.forEach(f => { totBal[f] += bal[f]; totOrig[f] += (d[f]||0); });
       totalRows++;
@@ -724,32 +785,26 @@ function renderStatusBar() {
   const sb = document.getElementById('statusBar');
   if (!sb) return;
   const kupci = [...new Set(dispozicije.map(d=>d.kupac))].length;
-  let orig={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  let spnt={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  const _sbToday = new Date(); _sbToday.setHours(0,0,0,0);
-  const _sbTodayStr = localDateStr(_sbToday);
+  // Sume originalnih (uplaćenih) dispozicija po sortimentu
+  const orig={tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   dispozicije.forEach(d => FIELDS.forEach(f => orig[f]+=(d[f]||0)));
-  otpreme.filter(o => !o.datum || o.datum <= _sbTodayStr)
-         .forEach(o => FIELDS.forEach(f => spnt[f]+=(o[f]||0)));
   const tO = FIELDS.reduce((s,f)=>s+orig[f],0);
-  const tS = FIELDS.reduce((s,f)=>s+spnt[f],0);
-  const tB = tO - tS;
-  const sheetOtp  = otpreme.filter(o=>o.source==='sheet').length;
-  const manualOtp = otpreme.filter(o=>o.source!=='sheet').length;
+
+  // Sume po sortimentima samo za aktivne (ne-empty) dispozicije
+  const sortLabels = {tc:'Trupci Č',rud:'Rudno',cd:'Cel.Duga',cc:'Cel.Cij.',
+                      tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
+  const sortHtml = FIELDS.filter(f=>orig[f]>0).map(f =>
+    `<div class="divider"></div>
+     <div class="stat"><div class="sl">${sortLabels[f]}</div><div class="sv" style="color:var(--text);font-size:16px">${orig[f].toFixed(2)}</div></div>`
+  ).join('');
+
   sb.innerHTML = `
     <div class="stat"><div class="sl">Dispozicija</div><div class="sv yellow">${dispozicije.length}</div></div>
     <div class="divider"></div>
     <div class="stat"><div class="sl">Kupaca</div><div class="sv yellow">${kupci}</div></div>
     <div class="divider"></div>
-    <div class="stat"><div class="sl">Ukupno avans</div><div class="sv yellow">${tO.toFixed(2)} m³</div></div>
-    <div class="divider"></div>
-    <div class="stat"><div class="sl">Isporučeno</div><div class="sv red">${tS.toFixed(2)} m³</div></div>
-    <div class="divider"></div>
-    <div class="stat"><div class="sl">Raspoloživo</div><div class="sv ${tB<0?'red':tB<tO*0.1?'yellow':'green'}">${tB.toFixed(2)} m³</div></div>
-    <div class="divider"></div>
-    <div class="stat"><div class="sl">Otpreme Sheet</div><div class="sv" style="color:#7a9af0">${sheetOtp}</div></div>
-    <div class="divider"></div>
-    <div class="stat"><div class="sl">Ručne otpreme</div><div class="sv yellow">${manualOtp}</div></div>`;
+    <div class="stat"><div class="sl">Ukupno dispozicija</div><div class="sv yellow">${tO.toFixed(2)} m³</div></div>
+    ${sortHtml}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -796,6 +851,56 @@ async function deleteDisp(id) {
   if (!confirm('Obriši dispoziciju? Otpreme u historiji ostaju.')) return;
   await fbDelDisp(id);
   showToast('Dispozicija obrisana','success');
+}
+
+function editDisp(id) {
+  const d = dispozicije.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('e_id').value    = d.id;
+  document.getElementById('e_kupac').value = d.kupac || '';
+  document.getElementById('e_broj').value  = d.broj  || '';
+  document.getElementById('e_datum').value = d.datum || '';
+  document.getElementById('e_ugovor').value= d.ugovor|| '';
+  document.getElementById('e_tc').value    = d.tc  || '';
+  document.getElementById('e_rud').value   = d.rud || '';
+  document.getElementById('e_cd').value    = d.cd  || '';
+  document.getElementById('e_cc').value    = d.cc  || '';
+  document.getElementById('e_tl').value    = d.tl  || '';
+  document.getElementById('e_fl').value    = d.fl  || '';
+  document.getElementById('e_oc').value    = d.oc  || '';
+  document.getElementById('e_od').value    = d.od  || '';
+  // Popuni datalist kupaca
+  const dl = document.getElementById('editKupciList');
+  const kupci = [...new Set(dispozicije.map(x=>x.kupac))].sort();
+  if (dl) dl.innerHTML = kupci.map(k=>`<option value="${k}">`).join('');
+  document.getElementById('editModal').classList.add('open');
+}
+
+async function saveDisp() {
+  const id    = document.getElementById('e_id').value;
+  const kupac = document.getElementById('e_kupac').value.trim();
+  const broj  = document.getElementById('e_broj').value.trim();
+  if (!kupac||!broj) { showToast('Kupac i broj su obavezni!','error'); return; }
+  const d = {
+    id, kupac, broj,
+    datum:  document.getElementById('e_datum').value,
+    ugovor: document.getElementById('e_ugovor').value.trim(),
+    tc:  parseFloat(document.getElementById('e_tc').value)  || 0,
+    rud: parseFloat(document.getElementById('e_rud').value) || 0,
+    cd:  parseFloat(document.getElementById('e_cd').value)  || 0,
+    cc:  parseFloat(document.getElementById('e_cc').value)  || 0,
+    tl:  parseFloat(document.getElementById('e_tl').value)  || 0,
+    fl:  parseFloat(document.getElementById('e_fl').value)  || 0,
+    oc:  parseFloat(document.getElementById('e_oc').value)  || 0,
+    od:  parseFloat(document.getElementById('e_od').value)  || 0,
+  };
+  await fbSetDisp(d);
+  closeEditModal();
+  showToast(`✅ Dispozicija "${broj}" ažurirana!`, 'success');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
 }
 
 // ═══════════════════════════════════════════════════════
