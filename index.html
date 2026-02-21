@@ -1444,12 +1444,20 @@ async function syncSheet() {
       const count = dateCountMap[d] || 0;
       const isToday = d === todayStr;
       const alreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === d);
-      return `<label style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid var(--border)">
+      // Koliko otprema je već oduzeto od dispozicija za taj dan
+      const dayOtp = otpreme.filter(o => o.datum === d);
+      const dayOtpCount = dayOtp.length;
+      const dayOtpM3 = dayOtp.reduce((s,o) => s + FIELDS.reduce((ss,f) => ss + (o[f]||0), 0), 0);
+      const vecDodano = dayOtpCount > 0
+        ? `<span style="margin-left:auto;font-size:11px;color:var(--accent);font-weight:600">već dodano (${dayOtpCount} otp, ${dayOtpM3.toFixed(2)} m³)</span>`
+        : '';
+      return `<label style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid var(--border);flex-wrap:wrap">
         <input type="checkbox" value="${d}" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
         <span style="font-weight:700;font-size:15px">${label}${isToday ? ' <em style="font-size:11px;font-weight:400;color:var(--accent)">(danas)</em>' : ''}</span>
         <span style="font-size:12px;color:var(--muted)">${count} stavki</span>
-        ${alreadyDone ? '<span style="margin-left:auto;font-size:11px;color:#4caf50;font-weight:600">✓ uvezeno</span>' : ''}
-        ${count === 0 ? '<span style="margin-left:auto;font-size:11px;color:var(--muted)">nema u sheet-u</span>' : ''}
+        ${alreadyDone ? '<span style="font-size:11px;color:#4caf50;font-weight:600">✓ uvezeno</span>' : ''}
+        ${count === 0 && dayOtpCount === 0 ? '<span style="margin-left:auto;font-size:11px;color:var(--muted)">nema u sheet-u</span>' : ''}
+        ${vecDodano}
       </label>`;
     }).join('');
 
@@ -1459,10 +1467,16 @@ async function syncSheet() {
     const [ty, tm, tday] = todayStr.split('-');
     document.getElementById('syncTodayDate').textContent = `${tday}.${tm}.${ty}`;
     document.getElementById('syncTodayCheck').checked = false;
+    const todayOtp = otpreme.filter(o => o.datum === todayStr);
+    const todayOtpCount = todayOtp.length;
+    const todayOtpM3 = todayOtp.reduce((s,o) => s + FIELDS.reduce((ss,f) => ss + (o[f]||0), 0), 0);
     const todayStatus = document.getElementById('syncTodayStatus');
     if (todayAlreadyDone) {
-      todayStatus.textContent = '✓ uvezeno';
+      todayStatus.innerHTML = `✓ uvezeno${todayOtpCount > 0 ? ` <span style="color:var(--accent)">(već dodano: ${todayOtpCount} otp, ${todayOtpM3.toFixed(2)} m³)</span>` : ''}`;
       todayStatus.style.color = '#4caf50';
+    } else if (todayOtpCount > 0) {
+      todayStatus.innerHTML = `<span style="color:var(--accent);font-weight:600">već dodano (${todayOtpCount} otp, ${todayOtpM3.toFixed(2)} m³)</span>`;
+      todayStatus.style.color = 'var(--accent)';
     } else if (todayCount > 0) {
       todayStatus.textContent = `${todayCount} stavki`;
       todayStatus.style.color = 'var(--muted)';
