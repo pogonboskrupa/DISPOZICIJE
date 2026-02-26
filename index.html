@@ -402,8 +402,62 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <div id="tab-pretprodaja" class="panel">
     <div id="pretprodajaList"></div>
 
+    <!-- BRZI UNOS SVIH KLASA -->
+    <div class="form-section" style="margin-top:20px" id="bulkPPSection">
+      <h2>⚡ Brzi unos – sve klase odjednom</h2>
+      <div class="form-grid" style="margin-bottom:14px">
+        <div class="form-group" style="grid-column:span 2">
+          <label>Kupac *</label>
+          <input type="text" id="bpp_kupac" list="bpp_kupac_list" placeholder="npr. DRVO EXPORT IMPORT">
+          <datalist id="bpp_kupac_list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Broj dispozicije *</label>
+          <input type="text" id="bpp_broj" placeholder="npr. 01/26-L">
+        </div>
+        <div class="form-group">
+          <label>Datum</label>
+          <input type="date" id="bpp_datum">
+        </div>
+        <div class="form-group">
+          <label>Odjel *</label>
+          <input type="text" id="bpp_odjel" list="bpp_odjel_list" placeholder="Odaberi ili upiši odjel">
+          <datalist id="bpp_odjel_list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Ugovor</label>
+          <input type="text" id="bpp_ugovor" placeholder="npr. 01-2793-1/25">
+        </div>
+      </div>
+      <div class="section-label">🌲 ČETINARI</div>
+      <div class="form-grid" id="bpp_cetinari_grid">
+        <div class="form-group"><label>F/L</label><input type="number" id="bpp_FL" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>I klasa</label><input type="number" id="bpp_I" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>II klasa</label><input type="number" id="bpp_II" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>III klasa</label><input type="number" id="bpp_III" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel.Duga</label><input type="number" id="bpp_CELD" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel.Cijepana</label><input type="number" id="bpp_CELC" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Škart</label><input type="number" id="bpp_SKART" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="section-label">🍂 LIŠĆARI</div>
+      <div class="form-grid" id="bpp_liscari_grid">
+        <div class="form-group"><label>F/L L</label><input type="number" id="bpp_FLL" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>I klasa L</label><input type="number" id="bpp_IL" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>II klasa L</label><input type="number" id="bpp_IIL" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>III klasa L</label><input type="number" id="bpp_IIIL" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr.Dugi</label><input type="number" id="bpp_OD" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr.Cijepani</label><input type="number" id="bpp_OC" step="0.01" placeholder="0.00"></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px">Klase s količinom 0 se neće kreirati. Svaka klasa dobija poseban zapis.</p>
+      <div class="form-actions">
+        <button class="btn btn-success" onclick="addBulkPretprodaja()">⚡ Spremi sve klase</button>
+        <button class="btn btn-ghost" onclick="clearBulkPPForm()">✕ Poništi</button>
+      </div>
+    </div>
+
+    <!-- POJEDINAČNI UNOS KLASE -->
     <div class="form-section" style="margin-top:20px">
-      <h2>➕ Dodaj klasa-red</h2>
+      <h2>➕ Dodaj jedan klasa-red</h2>
       <div class="form-grid">
         <div class="form-group" style="grid-column:span 2">
           <label>Kupac *</label>
@@ -420,7 +474,8 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Odjel</label>
-          <input type="text" id="pp_odjel" placeholder="npr. 21 Vojskova">
+          <input type="text" id="pp_odjel" list="pp_odjel_list" placeholder="Odaberi ili upiši odjel">
+          <datalist id="pp_odjel_list"></datalist>
         </div>
         <div class="form-group">
           <label>Ugovor</label>
@@ -430,29 +485,33 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
           <label>Klasa *</label>
           <input type="text" id="pp_klasa" list="pp_klasa_list" placeholder="npr. I klasa, F/L, Cel.Duga...">
           <datalist id="pp_klasa_list">
+            <option value="F/L">
             <option value="I klasa">
             <option value="II klasa">
             <option value="III klasa">
-            <option value="F/L">
             <option value="Cel.Duga">
             <option value="Cel.Cij.">
-            <option value="Rudno">
-            <option value="Ogr.Cij.">
+            <option value="Škart">
+            <option value="F/L L">
+            <option value="I klasa L">
+            <option value="II klasa L">
+            <option value="III klasa L">
             <option value="Ogr.Dugi">
+            <option value="Ogr.Cijepani">
           </datalist>
         </div>
       </div>
       <div class="section-label">🌲 ČETINARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="pp_tc" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Rudno / RD (m³)</label><input type="number" id="pp_rud" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci / F/L Č (m³)</label><input type="number" id="pp_tc" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Škart / Rudno (m³)</label><input type="number" id="pp_rud" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="pp_cd" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="pp_cc" step="0.01" placeholder="0.00"></div>
       </div>
       <div class="section-label">🍂 LIŠĆARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="pp_tl" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>F/L (m³)</label><input type="number" id="pp_fl" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci L (m³)</label><input type="number" id="pp_tl" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L L (m³)</label><input type="number" id="pp_fl" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="pp_oc" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="pp_od" step="0.01" placeholder="0.00"></div>
       </div>
@@ -591,11 +650,20 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
 
 <!-- SYNC DATE MODAL -->
 <div class="modal-bg" id="syncModal">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:480px">
     <h3>📅 Odaberi datume za sinkronizaciju</h3>
-    <p style="color:var(--muted);font-size:13px;margin-bottom:18px">
+    <p style="color:var(--muted);font-size:13px;margin-bottom:14px">
       Označi datume čije otpreme želiš preuzeti iz <strong>INDEKS_OTPREMA</strong>.
     </p>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">🌲 Odjel (pretprodaja)</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <select id="syncOdjel" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none">
+          <option value="">— Regularne dispozicije (bez odjela) —</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">Ako odabereš odjel, redovi iz sheet-a se sparuju s pretprodajom tog odjela (po klasi).</div>
+    </div>
     <div id="syncDateList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px"></div>
     <label id="syncTodayRow" style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;border:1px solid var(--border);margin-bottom:8px">
       <input type="checkbox" id="syncTodayCheck" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
@@ -652,6 +720,23 @@ const SHEET_NAME = 'INDEKS_OTPREMA';
 const BAZA_SHEET = 'SPISAK KUPACA';
 const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
+
+// Mapiranje kolona INDEKS_OTPREMA → pretprodaja klasa → polje
+const PP_KLASA_MAP = [
+  { sheetCol: 'F/L',          klasa: 'F/L',          field: 'tc'  },
+  { sheetCol: 'I',            klasa: 'I klasa',       field: 'tc'  },
+  { sheetCol: 'II',           klasa: 'II klasa',      field: 'tc'  },
+  { sheetCol: 'III',          klasa: 'III klasa',     field: 'tc'  },
+  { sheetCol: 'CEL.DUGA',     klasa: 'Cel.Duga',      field: 'cd'  },
+  { sheetCol: 'CEL.CIJEPANA', klasa: 'Cel.Cij.',      field: 'cc'  },
+  { sheetCol: 'ŠKART',        klasa: 'Škart',         field: 'rud' },
+  { sheetCol: 'F/L L',        klasa: 'F/L L',         field: 'fl'  },
+  { sheetCol: 'I L',          klasa: 'I klasa L',     field: 'tl'  },
+  { sheetCol: 'II L',         klasa: 'II klasa L',    field: 'tl'  },
+  { sheetCol: 'III L',        klasa: 'III klasa L',   field: 'tl'  },
+  { sheetCol: 'OGR.DUGI',     klasa: 'Ogr.Dugi',      field: 'od'  },
+  { sheetCol: 'OGR.CIJEPANI', klasa: 'Ogr.Cijepani',  field: 'oc'  },
+];
 
 // ═══════════════════════════════════════════════════════
 //  STATE
@@ -1529,6 +1614,16 @@ async function syncSheet() {
     // Cache helpers for doSync()
     window._syncData = { rows, todayStr, cv, cs, getDate };
 
+    // Popuni odjel dropdown iz postojećih pretprodaja
+    const syncOdjelSel = document.getElementById('syncOdjel');
+    if (syncOdjelSel) {
+      const existingOdjeli = [...new Set(pretprodaje.map(p => p.odjel).filter(Boolean))].sort();
+      syncOdjelSel.innerHTML =
+        '<option value="">— Regularne dispozicije (bez odjela) —</option>' +
+        existingOdjeli.map(o => `<option value="${o}">🌲 Odjel: ${o}</option>`).join('');
+      syncOdjelSel.value = '';
+    }
+
     // Always show last 5 days: today + 4 back
     const last5 = [];
     for (let i = 0; i < 5; i++) {
@@ -1632,6 +1727,9 @@ async function doSync() {
   const selectedDates = [...new Set(checked)];
   if (!selectedDates.length) { showToast('Odaberi barem jedan datum!', 'error'); return; }
 
+  // Odabrani odjel – ako postoji, routiramo na pretprodaju
+  const selectedOdjel = (document.getElementById('syncOdjel')?.value || '').trim();
+
   closeSyncModal();
 
   const btn     = document.getElementById('syncBtn');
@@ -1657,6 +1755,48 @@ async function doSync() {
       // Only import selected dates
       if (!selectedDates.includes(datum)) continue;
 
+      // ── PRETPRODAJA ROUTING ────────────────────────────
+      if (selectedOdjel) {
+        // Čitamo po klasa-kolonama iz PP_KLASA_MAP
+        const ku = kupacRaw.toUpperCase().trim();
+        for (const pm of PP_KLASA_MAP) {
+          const qty = cv(row, pm.sheetCol);
+          if (qty <= 0) continue;
+
+          // Tražimo pretprodaja entry: kupac + odjel + klasa
+          const ppEntry = pretprodaje.find(p => {
+            const pk = p.kupac.toUpperCase().trim();
+            return (pk === ku || pk.includes(ku) || ku.includes(pk))
+              && p.odjel === selectedOdjel
+              && p.klasa === pm.klasa;
+          });
+
+          const rowKey = `pp_${datum}_${kupacRaw}_${selectedOdjel}_${pm.klasa}_${qty}`;
+          if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
+          existingKeys.add(rowKey);
+          existingBaseKeys.add(rowKey);
+
+          const otp = {
+            id: 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+            sheet_key: rowKey,
+            source: 'sheet',
+            kupac: kupacRaw,
+            disp_id: ppEntry ? ppEntry.id : null,
+            unmatched: !ppEntry,
+            datum,
+            broj: cs(row, 'OTPREMAČ') || '',
+            odjel: selectedOdjel,
+            klasa: pm.klasa,
+            tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
+          };
+          otp[pm.field] = qty;
+          batchDocs.push({ id: otp.id, data: otp });
+          newCount++;
+        }
+        continue; // sljedeći row – ne radi regularni matching
+      }
+
+      // ── REGULARNE DISPOZICIJE ────────────────────────────
       const qtyRow = {
         tc:  cv(row, 'TRUPCI Č'),
         rud: cv(row, 'RD'),
@@ -1807,6 +1947,15 @@ function renderPretprodaja() {
   const allKupci = [...new Set([...kupacList, ...ppKupci])].sort();
   const kupacDl = document.getElementById('pp_kupac_list');
   if (kupacDl) kupacDl.innerHTML = allKupci.map(k => `<option value="${k}">`).join('');
+  const bppKupacDl = document.getElementById('bpp_kupac_list');
+  if (bppKupacDl) bppKupacDl.innerHTML = allKupci.map(k => `<option value="${k}">`).join('');
+
+  // Popuni datalist za odjele
+  const ppOdjeli = [...new Set(pretprodaje.map(p => p.odjel).filter(Boolean))].sort();
+  ['pp_odjel_list','bpp_odjel_list'].forEach(dlId => {
+    const dl = document.getElementById(dlId);
+    if (dl) dl.innerHTML = ppOdjeli.map(o => `<option value="${o}">`).join('');
+  });
 
   if (!pretprodaje.length) {
     list.innerHTML = `<div class="empty-state"><div class="big">🏷</div><p>Nema pretprodaja. Dodaj prvi klasa-red donjom formom.</p></div>`;
@@ -1902,6 +2051,63 @@ function renderPretprodaja() {
   });
 
   list.innerHTML = html;
+}
+
+// Brzi unos svih klasa odjednom
+async function addBulkPretprodaja() {
+  const kupac  = (document.getElementById('bpp_kupac').value||'').trim();
+  const odjel  = (document.getElementById('bpp_odjel').value||'').trim();
+  const broj   = (document.getElementById('bpp_broj').value||'').trim();
+  if (!kupac || !odjel) { showToast('Kupac i odjel su obavezni za brzi unos!','error'); return; }
+
+  // Mapa: inputId → { klasa, field }
+  const BPP_MAP = [
+    { id:'bpp_FL',   klasa:'F/L',          field:'tc'  },
+    { id:'bpp_I',    klasa:'I klasa',       field:'tc'  },
+    { id:'bpp_II',   klasa:'II klasa',      field:'tc'  },
+    { id:'bpp_III',  klasa:'III klasa',     field:'tc'  },
+    { id:'bpp_CELD', klasa:'Cel.Duga',      field:'cd'  },
+    { id:'bpp_CELC', klasa:'Cel.Cij.',      field:'cc'  },
+    { id:'bpp_SKART',klasa:'Škart',         field:'rud' },
+    { id:'bpp_FLL',  klasa:'F/L L',         field:'fl'  },
+    { id:'bpp_IL',   klasa:'I klasa L',     field:'tl'  },
+    { id:'bpp_IIL',  klasa:'II klasa L',    field:'tl'  },
+    { id:'bpp_IIIL', klasa:'III klasa L',   field:'tl'  },
+    { id:'bpp_OD',   klasa:'Ogr.Dugi',      field:'od'  },
+    { id:'bpp_OC',   klasa:'Ogr.Cijepani',  field:'oc'  },
+  ];
+
+  const entries = [];
+  BPP_MAP.forEach(m => {
+    const qty = parseFloat(document.getElementById(m.id)?.value) || 0;
+    if (qty <= 0) return;
+    const p = {
+      id: 'pp' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+      createdAt: new Date().toISOString(),
+      kupac, odjel, broj,
+      datum:  document.getElementById('bpp_datum').value,
+      ugovor: (document.getElementById('bpp_ugovor').value||'').trim(),
+      klasa:  m.klasa,
+      tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
+    };
+    p[m.field] = qty;
+    entries.push(p);
+  });
+
+  if (!entries.length) { showToast('Unesite barem jednu količinu!','error'); return; }
+
+  for (const p of entries) await fbSetPretprodaja(p);
+
+  clearBulkPPForm();
+  showToast(`✅ Dodano ${entries.length} klasa-redova za odjel "${odjel}"!`, 'success');
+}
+
+function clearBulkPPForm() {
+  ['bpp_kupac','bpp_broj','bpp_odjel','bpp_ugovor',
+   'bpp_FL','bpp_I','bpp_II','bpp_III','bpp_CELD','bpp_CELC','bpp_SKART',
+   'bpp_FLL','bpp_IL','bpp_IIL','bpp_IIIL','bpp_OD','bpp_OC']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('bpp_datum').value = localDateStr();
 }
 
 async function addPretprodajaEntry() {
@@ -2036,7 +2242,14 @@ function switchTab(t) {
   document.querySelectorAll('.mnav-btn[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===t));
   if(t==='pregled')     renderPregled();
   if(t==='nova')        renderNova();
-  if(t==='pretprodaja') renderPretprodaja();
+  if(t==='pretprodaja') {
+    renderPretprodaja();
+    // Inicijaliziraj datume ako su prazni
+    const ppd = document.getElementById('pp_datum');
+    if (ppd && !ppd.value) ppd.value = localDateStr();
+    const bppd = document.getElementById('bpp_datum');
+    if (bppd && !bppd.value) bppd.value = localDateStr();
+  }
   if(t==='otprema')     renderOtprema();
   if(t==='hist-disp')   renderHistDisp();
   if(t==='historija')   renderHistorija();
