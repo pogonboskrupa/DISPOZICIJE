@@ -310,6 +310,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <div class="tabs">
     <button class="tab active" onclick="switchTab('pregled')">📋 Dispozicije</button>
     <button class="tab" onclick="switchTab('nova')">➕ Nova dispozicija</button>
+    <button class="tab" onclick="switchTab('pretprodaja')">🏷 Pretprodaja</button>
     <button class="tab" onclick="switchTab('otprema')">🚛 Ručna otprema</button>
     <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
@@ -393,6 +394,71 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <div class="form-actions">
         <button class="btn btn-primary" onclick="addDispozicija()">💾 Spremi u bazu</button>
         <button class="btn btn-ghost" onclick="clearNovaForm()">✕ Poništi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRETPRODAJA -->
+  <div id="tab-pretprodaja" class="panel">
+    <div id="pretprodajaList"></div>
+
+    <div class="form-section" style="margin-top:20px">
+      <h2>➕ Dodaj klasa-red</h2>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:span 2">
+          <label>Kupac *</label>
+          <input type="text" id="pp_kupac" list="pp_kupac_list" placeholder="npr. DRVO EXPORT IMPORT">
+          <datalist id="pp_kupac_list"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Broj dispozicije *</label>
+          <input type="text" id="pp_broj" placeholder="npr. 01/26-L">
+        </div>
+        <div class="form-group">
+          <label>Datum</label>
+          <input type="date" id="pp_datum">
+        </div>
+        <div class="form-group">
+          <label>Odjel</label>
+          <input type="text" id="pp_odjel" placeholder="npr. 21 Vojskova">
+        </div>
+        <div class="form-group">
+          <label>Ugovor</label>
+          <input type="text" id="pp_ugovor" placeholder="npr. 01-2793-1/25">
+        </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>Klasa *</label>
+          <input type="text" id="pp_klasa" list="pp_klasa_list" placeholder="npr. I klasa, F/L, Cel.Duga...">
+          <datalist id="pp_klasa_list">
+            <option value="I klasa">
+            <option value="II klasa">
+            <option value="III klasa">
+            <option value="F/L">
+            <option value="Cel.Duga">
+            <option value="Cel.Cij.">
+            <option value="Rudno">
+            <option value="Ogr.Cij.">
+            <option value="Ogr.Dugi">
+          </datalist>
+        </div>
+      </div>
+      <div class="section-label">🌲 ČETINARI</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="pp_tc" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Rudno / RD (m³)</label><input type="number" id="pp_rud" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="pp_cd" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="pp_cc" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="section-label">🍂 LIŠĆARI</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="pp_tl" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L (m³)</label><input type="number" id="pp_fl" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="pp_oc" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="pp_od" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="addPretprodajaEntry()">💾 Spremi u bazu</button>
+        <button class="btn btn-ghost" onclick="clearPretprodajaForm()">✕ Poništi</button>
       </div>
     </div>
   </div>
@@ -560,6 +626,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="nova" onclick="switchTab('nova')">
     <span class="mni">➕</span><span class="mnl">Nova</span>
   </button>
+  <button class="mnav-btn" data-tab="pretprodaja" onclick="switchTab('pretprodaja')">
+    <span class="mni">🏷</span><span class="mnl">Pretprod.</span>
+  </button>
   <button class="mnav-btn" onclick="syncSheet()">
     <span class="mni">🔄</span><span class="mnl">Otprema</span>
   </button>
@@ -587,10 +656,11 @@ const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
-let dispozicije = [];
-let otpreme     = [];
-let kupacList   = [];
-let pendingOtp  = null;
+let dispozicije  = [];
+let otpreme      = [];
+let pretprodaje  = [];
+let kupacList    = [];
+let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
@@ -700,6 +770,12 @@ async function initFirebase() {
       renderAll();
     });
 
+  fs.onSnapshot(fs.collection(db, 'pretprodaje'), snap => {
+    pretprodaje = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    pretprodaje.sort((a,b) => (a.kupac||'').localeCompare(b.kupac||'') || (a.datum||'').localeCompare(b.datum||''));
+    renderAll();
+  });
+
   // ── meta: last sync time ──────────────────────────────
   try {
     const metaSnap = await fs.getDocs(fs.collection(db, 'meta'));
@@ -764,6 +840,14 @@ async function fbDelOtp(id) {
 async function fbSetMeta(key, data) {
   if (!fs||!db) return;
   await fs.setDoc(fs.doc(db, 'meta', key), data);
+}
+async function fbSetPretprodaja(p) {
+  if (!fs||!db) return;
+  await fs.setDoc(fs.doc(db, 'pretprodaje', p.id), p);
+}
+async function fbDelPretprodaja(id) {
+  if (!fs||!db) return;
+  await fs.deleteDoc(fs.doc(db, 'pretprodaje', id));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1126,11 +1210,17 @@ function closeEditModal() {
 // ═══════════════════════════════════════════════════════
 //  RUČNA OTPREMA
 // ═══════════════════════════════════════════════════════
+function findAnyDisp(id) {
+  return dispozicije.find(d=>d.id===id) || pretprodaje.find(p=>p.id===id);
+}
+
 function renderOtprema() {
   const sel = document.getElementById('o_kupac');
   const src = kupacList.length ? kupacList : [...new Set(dispozicije.map(d=>d.kupac))].sort();
+  const ppKupci = [...new Set(pretprodaje.map(p=>p.kupac))];
+  const allSrc = [...new Set([...src, ...ppKupci])].sort();
   sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
-    src.map(k=>`<option value="${k}">${k}</option>`).join('');
+    allSrc.map(k=>`<option value="${k}">${k}</option>`).join('');
   document.getElementById('o_datum').value = localDateStr();
 }
 
@@ -1138,15 +1228,23 @@ function loadKupacDisp() {
   const kupac = document.getElementById('o_kupac').value;
   const sel   = document.getElementById('o_disp');
   const kd    = dispozicije.filter(d=>d.kupac===kupac);
-  sel.innerHTML = '<option value="">— Odaberi dispoziciju —</option>' +
-    kd.map(d=>`<option value="${d.id}">${d.broj} | ${d.datum||''} | ${d.ugovor||''}</option>`).join('');
+  const kp    = pretprodaje.filter(p=>p.kupac===kupac);
+  let html = '<option value="">— Odaberi dispoziciju —</option>';
+  if (kd.length) {
+    html += kd.map(d=>`<option value="${d.id}">${d.broj} | ${d.datum||''} | ${d.ugovor||''}</option>`).join('');
+  }
+  if (kp.length) {
+    html += '<option disabled>── Pretprodaja ──</option>';
+    html += kp.map(p=>`<option value="${p.id}">[PP] ${p.klasa} – ${p.broj||''} ${p.odjel?'Odjel '+p.odjel:''}</option>`).join('');
+  }
+  sel.innerHTML = html;
   document.getElementById('availWrap').style.display='none';
 }
 
 function showAvail() {
   const dispId = document.getElementById('o_disp').value;
   if (!dispId) { document.getElementById('availWrap').style.display='none'; return; }
-  const disp = dispozicije.find(d=>d.id===dispId);
+  const disp = findAnyDisp(dispId);
   const bal  = getBalance(disp);
   document.getElementById('availGrid').innerHTML = FIELDS.map(f => {
     const o = disp[f]||0;
@@ -1167,7 +1265,7 @@ function showAvail() {
 function chkAvail(field) {
   const dispId = document.getElementById('o_disp').value;
   if (!dispId) return;
-  const disp = dispozicije.find(d=>d.id===dispId);
+  const disp = findAnyDisp(dispId);
   const bal  = getBalance(disp);
   const val  = parseFloat(document.getElementById('o_'+field).value)||0;
   document.getElementById('oWarn').textContent =
@@ -1184,7 +1282,7 @@ function submitOtprema() {
   let total = 0;
   FIELDS.forEach(f => { vals[f] = parseFloat(document.getElementById('o_'+f).value)||0; total += vals[f]; });
   if (total===0) { showToast('Unesite barem jednu količinu!','error'); return; }
-  const disp    = dispozicije.find(d=>d.id===dispId);
+  const disp    = findAnyDisp(dispId);
   const bal     = getBalance(disp);
   const overages = FIELDS.filter(f=>vals[f]>bal[f]);
   document.getElementById('confirmText').innerHTML =
@@ -1698,6 +1796,154 @@ function exportCSV() {
 // ═══════════════════════════════════════════════════════
 //  HISTORIJA DISPOZICIJA (zadnjih 30 dana)
 // ═══════════════════════════════════════════════════════
+//  PRETPRODAJA
+// ═══════════════════════════════════════════════════════
+function renderPretprodaja() {
+  const list = document.getElementById('pretprodajaList');
+  if (!list) return;
+
+  // Popuni datalist za kupce
+  const ppKupci = [...new Set(pretprodaje.map(p => p.kupac))];
+  const allKupci = [...new Set([...kupacList, ...ppKupci])].sort();
+  const kupacDl = document.getElementById('pp_kupac_list');
+  if (kupacDl) kupacDl.innerHTML = allKupci.map(k => `<option value="${k}">`).join('');
+
+  if (!pretprodaje.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">🏷</div><p>Nema pretprodaja. Dodaj prvi klasa-red donjom formom.</p></div>`;
+    return;
+  }
+
+  // Grupiraj po (kupac|broj|odjel)
+  const grouped = {};
+  pretprodaje.forEach(p => {
+    const key = `${p.kupac}|${p.broj||''}|${p.odjel||''}`;
+    (grouped[key] = grouped[key]||[]).push(p);
+  });
+
+  let html = '';
+  Object.entries(grouped).forEach(([key, rows], gi) => {
+    const r0 = rows[0];
+    const datFmt = r0.datum ? r0.datum.split('-').reverse().join('.') : '—';
+
+    // Totali po grupama
+    const totOrig = {}; const totBal = {};
+    FIELDS.forEach(f => { totOrig[f] = 0; totBal[f] = 0; });
+    rows.forEach(p => {
+      const bal = getBalance(p);
+      FIELDS.forEach(f => { totOrig[f] += (p[f]||0); totBal[f] += bal[f]; });
+    });
+
+    html += `
+    <div style="margin-bottom:24px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <!-- Header licitacije -->
+      <div style="background:var(--surface2);padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid var(--accent)">
+        <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
+        <span style="font-size:13px;color:var(--muted)">Br: <strong style="color:var(--text)">${r0.broj||'—'}</strong></span>
+        <span style="font-size:13px;color:var(--muted)">${datFmt}</span>
+        ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
+        ${r0.ugovor ? `<span style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${r0.ugovor}</strong></span>` : ''}
+      </div>
+      <!-- Tabela po klasama -->
+      <div class="table-wrap" style="border:none;border-radius:0">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="1"></th>
+              <th colspan="4" style="border-left:2px solid var(--border)">ČETINARI</th>
+              <th colspan="4" style="border-left:2px solid var(--border)">LIŠĆARI</th>
+              <th colspan="1"></th>
+            </tr>
+            <tr>
+              <th style="text-align:left;min-width:110px">KLASA</th>
+              <th style="border-left:2px solid var(--border)">Trupci Č</th>
+              <th>Rudno</th>
+              <th>Cel.Duga</th>
+              <th>Cel.Cij.</th>
+              <th style="border-left:2px solid var(--border)">Trupci L</th>
+              <th>F/L</th>
+              <th>Ogr.Cij.</th>
+              <th>Ogr.Dugi</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+    rows.forEach(p => {
+      const bal = getBalance(p);
+      html += `<tr class="kupac-first">
+        <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${p.klasa||'—'}</td>
+        <td style="border-left:2px solid var(--border)">${p.tc  ? fmtBal(bal.tc,  p.tc)  : ''}</td>
+        <td>${p.rud ? fmtBal(bal.rud, p.rud) : ''}</td>
+        <td>${p.cd  ? fmtBal(bal.cd,  p.cd)  : ''}</td>
+        <td>${p.cc  ? fmtBal(bal.cc,  p.cc)  : ''}</td>
+        <td style="border-left:2px solid var(--border)">${p.tl  ? fmtBal(bal.tl,  p.tl)  : ''}</td>
+        <td>${p.fl  ? fmtBal(bal.fl,  p.fl)  : ''}</td>
+        <td>${p.oc  ? fmtBal(bal.oc,  p.oc)  : ''}</td>
+        <td>${p.od  ? fmtBal(bal.od,  p.od)  : ''}</td>
+        <td><button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši">🗑</button></td>
+      </tr>`;
+    });
+
+    // Total row
+    html += `<tr class="total-row">
+      <td style="text-align:left">UKUPNO</td>
+      <td style="border-left:2px solid var(--border)">${totOrig.tc  ? fmtBal(totBal.tc,  totOrig.tc)  : ''}</td>
+      <td>${totOrig.rud ? fmtBal(totBal.rud, totOrig.rud) : ''}</td>
+      <td>${totOrig.cd  ? fmtBal(totBal.cd,  totOrig.cd)  : ''}</td>
+      <td>${totOrig.cc  ? fmtBal(totBal.cc,  totOrig.cc)  : ''}</td>
+      <td style="border-left:2px solid var(--border)">${totOrig.tl  ? fmtBal(totBal.tl,  totOrig.tl)  : ''}</td>
+      <td>${totOrig.fl  ? fmtBal(totBal.fl,  totOrig.fl)  : ''}</td>
+      <td>${totOrig.oc  ? fmtBal(totBal.oc,  totOrig.oc)  : ''}</td>
+      <td>${totOrig.od  ? fmtBal(totBal.od,  totOrig.od)  : ''}</td>
+      <td></td>
+    </tr>`;
+
+    html += `</tbody></table></div></div>`;
+  });
+
+  list.innerHTML = html;
+}
+
+async function addPretprodajaEntry() {
+  const kupac = (document.getElementById('pp_kupac').value||'').trim();
+  const klasa = (document.getElementById('pp_klasa').value||'').trim();
+  if (!kupac || !klasa) { showToast('Kupac i klasa su obavezni!','error'); return; }
+  const p = {
+    id: 'pp' + Date.now(),
+    createdAt: new Date().toISOString(),
+    kupac,
+    broj:   (document.getElementById('pp_broj').value||'').trim(),
+    datum:  document.getElementById('pp_datum').value,
+    odjel:  (document.getElementById('pp_odjel').value||'').trim(),
+    ugovor: (document.getElementById('pp_ugovor').value||'').trim(),
+    klasa,
+    tc:  parseFloat(document.getElementById('pp_tc').value)||0,
+    rud: parseFloat(document.getElementById('pp_rud').value)||0,
+    cd:  parseFloat(document.getElementById('pp_cd').value)||0,
+    cc:  parseFloat(document.getElementById('pp_cc').value)||0,
+    tl:  parseFloat(document.getElementById('pp_tl').value)||0,
+    fl:  parseFloat(document.getElementById('pp_fl').value)||0,
+    oc:  parseFloat(document.getElementById('pp_oc').value)||0,
+    od:  parseFloat(document.getElementById('pp_od').value)||0,
+  };
+  await fbSetPretprodaja(p);
+  clearPretprodajaForm();
+  showToast(`✅ Klasa-red "${klasa}" dodan!`, 'success');
+}
+
+async function deletePretprodajaEntry(id) {
+  if (!confirm('Obriši ovaj klasa-red?')) return;
+  await fbDelPretprodaja(id);
+  showToast('Red obrisan', 'success');
+}
+
+function clearPretprodajaForm() {
+  ['pp_kupac','pp_broj','pp_odjel','pp_ugovor','pp_klasa','pp_tc','pp_rud','pp_cd','pp_cc','pp_tl','pp_fl','pp_oc','pp_od']
+    .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('pp_datum').value = localDateStr();
+}
+
+// ═══════════════════════════════════════════════════════
 function renderHistDisp() {
   const search = (document.getElementById('hdSearch')?.value||'').toLowerCase();
   const list   = document.getElementById('histDispList');
@@ -1784,25 +2030,27 @@ function toggleDesktopView(isDesktop) {
 }
 
 function switchTab(t) {
-  const names = ['pregled','nova','otprema','hist-disp','historija'];
+  const names = ['pregled','nova','pretprodaja','otprema','hist-disp','historija'];
   document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.panel').forEach((el,i) => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.mnav-btn[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===t));
-  if(t==='pregled')   renderPregled();
-  if(t==='nova')      renderNova();
-  if(t==='otprema')   renderOtprema();
-  if(t==='hist-disp') renderHistDisp();
-  if(t==='historija') renderHistorija();
+  if(t==='pregled')     renderPregled();
+  if(t==='nova')        renderNova();
+  if(t==='pretprodaja') renderPretprodaja();
+  if(t==='otprema')     renderOtprema();
+  if(t==='hist-disp')   renderHistDisp();
+  if(t==='historija')   renderHistorija();
 }
 
 function renderAll() {
   const active = document.querySelector('.tab.active');
   if (!active) return;
   const idx = [...document.querySelectorAll('.tab')].indexOf(active);
-  const names = ['pregled','nova','otprema','hist-disp','historija'];
-  if (names[idx]==='pregled')   renderPregled();
-  if (names[idx]==='hist-disp') renderHistDisp();
-  if (names[idx]==='historija') renderHistorija();
+  const names = ['pregled','nova','pretprodaja','otprema','hist-disp','historija'];
+  if (names[idx]==='pregled')     renderPregled();
+  if (names[idx]==='pretprodaja') renderPretprodaja();
+  if (names[idx]==='hist-disp')   renderHistDisp();
+  if (names[idx]==='historija')   renderHistorija();
 }
 
 let toastTimer;
