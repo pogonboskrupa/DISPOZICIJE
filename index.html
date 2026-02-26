@@ -186,6 +186,7 @@ td.warn,.warn{color:var(--accent);font-weight:600;}
 .realtime-pulse{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
 .total-row td{background:var(--surface2);font-weight:700;border-top:2px solid var(--border);}
+tr.kupac-first td{border-top:2px solid var(--accent)!important;}
 .sortable{cursor:pointer;user-select:none;transition:color .15s;}
 .sortable:hover{color:var(--accent)!important;}
 .sortable.sort-asc::after{content:' ▲';font-size:10px;opacity:.8;}
@@ -900,7 +901,7 @@ function renderPregled() {
       const bal    = getBalance(d);
       const st     = balStatus(d);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
-      html += `<tr>
+      html += `<tr${i===0 ? ' class="kupac-first"' : ''}>
         <td class="kupac">${i===0 ? kupac : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
         <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
