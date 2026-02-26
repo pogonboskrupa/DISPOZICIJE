@@ -586,6 +586,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <input type="text" id="hSearch" placeholder="Pretraži po kupcu, datumu..." oninput="renderHistorija()">
       <label><input type="checkbox" id="hOnlySheet" onchange="renderHistorija()"> Samo iz Google Sheets</label>
       <label><input type="checkbox" id="hOnlyManual" onchange="renderHistorija()"> Samo ručne</label>
+      <label><input type="checkbox" id="hOnlyPP" onchange="renderHistorija()"> 🏷 Samo pretprodaja</label>
       <button class="btn btn-danger" id="btnDeleteAll" onclick="deleteAllOtp()" style="margin-left:auto">🗑 Obriši sve</button>
     </div>
     <div id="historijaList"></div>
@@ -1420,10 +1421,16 @@ function renderHistorija() {
   const search     = (document.getElementById('hSearch')?.value||'').toLowerCase();
   const onlySheet  = document.getElementById('hOnlySheet')?.checked;
   const onlyManual = document.getElementById('hOnlyManual')?.checked;
+  const onlyPP     = document.getElementById('hOnlyPP')?.checked;
   const list       = document.getElementById('historijaList');
+
+  // Helper: je li otprema iz pretprodaje?
+  const isPP = o => !!(o.klasa || pretprodaje.some(p => p.id === o.disp_id));
+
   let filtered = [...otpreme].filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
     if (onlyManual && o.source==='sheet') return false;
+    if (onlyPP     && !isPP(o))           return false;
     return o.kupac.toLowerCase().includes(search) ||
            (o.broj||'').toLowerCase().includes(search) ||
            (o.datum||'').includes(search);
@@ -1496,18 +1503,32 @@ function renderHistorija() {
     } else {
       html += `<div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:hidden">`;
       dayOtpreme.forEach(o => {
-        const disp   = dispozicije.find(d=>d.id===o.disp_id);
-        const vals   = FIELDS.filter(f=>o[f]>0)
+        const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
+        const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
+        const isPretp  = !!(ppEntry || o.klasa);
+        const vals     = FIELDS.filter(f=>o[f]>0)
           .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${o[f]} m³</div></div>`).join('');
         const srcBadge = o.source==='sheet'
           ? '<span class="badge blue">📊 Sheet</span>'
           : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
         const unmatch = o.unmatched ? '<span class="badge red">⚠ Neuskl.</span>' : '';
-        html += `<div class="otprema-card" style="border-radius:0;border:none;border-bottom:1px solid var(--border);margin-bottom:0">
+        const ppBadge = isPretp
+          ? `<span class="badge" style="background:#2a1a38;border-color:#7a3aaa;color:#c47af0">🏷 Pretprodaja</span>`
+          : '';
+        const odjelBadge = (o.odjel || ppEntry?.odjel)
+          ? `<span class="badge" style="background:#1a2030;border-color:#3a5080;color:#7aaaf0">🌲 ${o.odjel || ppEntry.odjel}</span>`
+          : '';
+        const klasaBadge = (o.klasa || ppEntry?.klasa)
+          ? `<span class="badge" style="background:#1a2a1a;border-color:#3a6a3a;color:#7ad07a">${o.klasa || ppEntry.klasa}</span>`
+          : '';
+        // Referentni broj (dispozicija ili pretprodaja)
+        const refBroj = ppEntry?.broj || disp?.broj || '';
+        html += `<div class="otprema-card" style="border-radius:0;border:none;border-bottom:1px solid var(--border);margin-bottom:0${isPretp?';border-left:3px solid #7a3aaa':''}">
           <div style="min-width:140px">
             <div style="font-family:Syne,sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:3px">${o.kupac}</div>
-            <div>${srcBadge}${unmatch}</div>
-            ${disp ? `<div class="badge">${disp.broj}</div>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px">${srcBadge}${unmatch}${ppBadge}</div>
+            ${odjelBadge || klasaBadge ? `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:3px">${odjelBadge}${klasaBadge}</div>` : ''}
+            ${refBroj ? `<div class="badge">${refBroj}</div>` : ''}
             ${o.broj ? `<div class="badge green">${o.broj}</div>` : ''}
           </div>
           <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${vals||'<span style="color:var(--muted);font-size:13px">nema količina</span>'}</div>
@@ -1536,9 +1557,12 @@ async function deleteAllOtp() {
   const search     = (document.getElementById('hSearch')?.value||'').toLowerCase();
   const onlySheet  = document.getElementById('hOnlySheet')?.checked;
   const onlyManual = document.getElementById('hOnlyManual')?.checked;
+  const onlyPP     = document.getElementById('hOnlyPP')?.checked;
+  const isPP = o => !!(o.klasa || pretprodaje.some(p => p.id === o.disp_id));
   const filtered = otpreme.filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
     if (onlyManual && o.source==='sheet') return false;
+    if (onlyPP     && !isPP(o))           return false;
     return o.kupac.toLowerCase().includes(search) ||
            (o.broj||'').toLowerCase().includes(search) ||
            (o.datum||'').includes(search);
