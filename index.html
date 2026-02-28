@@ -2055,7 +2055,7 @@ function renderPretprodaja() {
 
     rows.forEach(p => {
       const bal = getBalance(p);
-      html += `<tr class="kupac-first">
+      html += `<tr id="pp-row-${p.id}" class="kupac-first">
         <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${p.klasa||'—'}</td>
         <td style="border-left:2px solid var(--border)">${p.tc  ? fmtBal(bal.tc,  p.tc)  : ''}</td>
         <td>${p.rud ? fmtBal(bal.rud, p.rud) : ''}</td>
@@ -2065,7 +2065,10 @@ function renderPretprodaja() {
         <td>${p.fl  ? fmtBal(bal.fl,  p.fl)  : ''}</td>
         <td>${p.oc  ? fmtBal(bal.oc,  p.oc)  : ''}</td>
         <td>${p.od  ? fmtBal(bal.od,  p.od)  : ''}</td>
-        <td><button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši">🗑</button></td>
+        <td style="white-space:nowrap">
+          <button class="del-disp-btn" onclick="editPP('${p.id}')" title="Uredi" style="margin-right:2px">✏️</button>
+          <button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši">🗑</button>
+        </td>
       </tr>`;
     });
 
@@ -2116,7 +2119,7 @@ async function addBulkPretprodaja() {
   const entries = [];
   BPP_MAP.forEach(m => {
     const qty = parseFloat(document.getElementById(m.id)?.value) || 0;
-    if (qty <= 0) return;
+    if (qty === 0) return;
     const p = {
       id: 'pp' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       createdAt: new Date().toISOString(),
@@ -2171,6 +2174,47 @@ async function addPretprodajaEntry() {
   await fbSetPretprodaja(p);
   clearPretprodajaForm();
   showToast(`✅ Klasa-red "${klasa}" dodan!`, 'success');
+}
+
+function editPP(id) {
+  const p = pretprodaje.find(pp => pp.id === id);
+  if (!p) return;
+  const tr = document.getElementById('pp-row-' + id);
+  if (!tr) return;
+  const inp = (field, val) =>
+    `<input id="ppe_${field}_${id}" type="number" step="0.01" value="${val||''}"
+      style="width:62px;font-size:12px;padding:2px 4px;background:var(--surface2);color:var(--text);border:1px solid var(--accent);border-radius:4px">`;
+  tr.innerHTML = `
+    <td style="text-align:left">
+      <input id="ppe_klasa_${id}" value="${p.klasa||''}"
+        style="width:90px;font-size:12px;padding:2px 4px;background:var(--surface2);color:var(--text);border:1px solid var(--accent);border-radius:4px">
+    </td>
+    <td style="border-left:2px solid var(--border)">${inp('tc',  p.tc)}</td>
+    <td>${inp('rud', p.rud)}</td>
+    <td>${inp('cd',  p.cd)}</td>
+    <td>${inp('cc',  p.cc)}</td>
+    <td style="border-left:2px solid var(--border)">${inp('tl',  p.tl)}</td>
+    <td>${inp('fl',  p.fl)}</td>
+    <td>${inp('oc',  p.oc)}</td>
+    <td>${inp('od',  p.od)}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-success" style="padding:3px 8px;font-size:11px" onclick="savePP('${id}')">💾</button>
+      <button class="btn btn-ghost"   style="padding:3px 8px;font-size:11px" onclick="renderPretprodaja()">✕</button>
+    </td>`;
+}
+
+async function savePP(id) {
+  const p = pretprodaje.find(pp => pp.id === id);
+  if (!p) return;
+  const fld = f => parseFloat(document.getElementById(`ppe_${f}_${id}`)?.value) || 0;
+  const updated = {
+    ...p,
+    klasa: (document.getElementById(`ppe_klasa_${id}`)?.value||'').trim() || p.klasa,
+    tc: fld('tc'), rud: fld('rud'), cd: fld('cd'), cc: fld('cc'),
+    tl: fld('tl'), fl: fld('fl'), oc: fld('oc'), od: fld('od'),
+  };
+  await fbSetPretprodaja(updated);
+  showToast('Red ažuriran!', 'success');
 }
 
 async function deletePretprodajaEntry(id) {
