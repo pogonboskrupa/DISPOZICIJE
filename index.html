@@ -542,7 +542,8 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Datum otpreme *</label>
-          <input type="date" id="o_datum">
+          <input type="date" id="o_datum" onchange="checkPPOnDate()">
+          <div id="ppDateInfo" style="margin-top:6px;display:none;padding:7px 11px;background:#2a1a38;border:1px solid #7a3aaa;border-radius:6px;color:#c47af0;font-size:12px;font-weight:600">🏷 Ima otprema za Pretprodaju</div>
         </div>
         <div class="form-group">
           <label>Otpremnica br.</label>
@@ -1402,6 +1403,17 @@ async function confirmOtprema() {
 function closeModal() {
   document.getElementById('confirmModal').classList.remove('open');
   pendingOtp = null;
+}
+
+function checkPPOnDate() {
+  const datum = document.getElementById('o_datum').value;
+  const el    = document.getElementById('ppDateInfo');
+  if (!datum || !el) return;
+  const hasPP = otpreme.some(o =>
+    o.datum === datum &&
+    (o.klasa || pretprodaje.some(p => p.id === o.disp_id))
+  );
+  el.style.display = hasPP ? '' : 'none';
 }
 
 function clearOtprema() {
