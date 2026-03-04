@@ -1523,8 +1523,6 @@ function openPrintWindow() {
         ? 'background:#fff0f0'
         : cls === 'done' ? 'color:#aaa;background:#f8f8f8'
         : cls === 'low'  ? 'background:#fffde7' : '';
-      const statusLabel = cls === 'over' ? ' <span style="color:#c0392b;font-weight:700">[PREKORAČENO]</span>'
-                        : cls === 'done' ? ' <span style="color:#999">[iscrpljeno]</span>' : '';
       const fmtV = v => v !== 0 ? v.toFixed(2) : '';
       dispRows += `<tr style="${rowStyle}">
         ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${kupac}</td>` : ''}
@@ -1538,7 +1536,7 @@ function openPrintWindow() {
         <td style="text-align:right">${fmtV(bal.fl)}</td>
         <td style="text-align:right">${fmtV(bal.oc)}</td>
         <td style="text-align:right">${fmtV(bal.od)}</td>
-        <td>${d.ugovor||''}${statusLabel}</td>
+        <td>${d.ugovor||''}</td>
       </tr>`;
     });
   });
