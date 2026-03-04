@@ -1461,8 +1461,7 @@ function openPrintWindow() {
         : cls === 'low' ? 'background:#fffde7' : '';
       const fmtV = v => v ? v.toFixed(2) : '';
       dispRows += `<tr style="${rowStyle}">
-        ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle;text-align:center">${rb++}</td>
-          <td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${kupac}</td>` : ''}
+        ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${kupac}</td>` : ''}
         <td style="text-align:center">${d.broj||''}</td>
         <td style="text-align:center">${dat}</td>
         <td style="text-align:right">${fmtV(bal.tc)}</td>
@@ -1504,8 +1503,7 @@ function openPrintWindow() {
       const fmtV = v => v ? v.toFixed(2) : '';
       ppRows += `<tr>
         ${i === 0
-          ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle;text-align:center">${pprb++}</td>
-             <td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${r0.kupac}</td>
+          ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${r0.kupac}</td>
              <td rowspan="${rows.length}" style="vertical-align:middle;text-align:center">${r0.odjel||''}</td>
              <td rowspan="${rows.length}" style="vertical-align:middle;text-align:center">${r0.broj||''}</td>`
           : ''}
@@ -1560,14 +1558,12 @@ function openPrintWindow() {
   <!-- ═══ STRANICA 1: DISPOZICIJE ═══ -->
   <div class="page">
     <div class="doc-header">
-      <h2>JP "ŠUME FEDERACIJE BiH" d.o.o. SARAJEVO</h2>
-      <h3>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h3>
-      <h3 style="margin-top:5px">STANJE PO DISPOZICIJAMA – ${dateFmt}. GODINE</h3>
+      <h2>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h2>
+      <h3 style="margin-top:4px">STANJE PO DISPOZICIJAMA – ${dateFmt}. GODINE</h3>
     </div>
     <table>
       <thead>
         <tr>
-          <th rowspan="2" style="width:28px">R.B.</th>
           <th rowspan="2">KUPAC</th>
           <th rowspan="2" style="width:52px">BROJ<br>DISP.</th>
           <th rowspan="2" style="width:52px">DATUM</th>
@@ -1585,7 +1581,7 @@ function openPrintWindow() {
       </tbody>
       <tfoot>
         <tr class="total-row">
-          <td colspan="4" style="text-align:right">UKUPNO:</td>
+          <td colspan="3" style="text-align:right">UKUPNO:</td>
           <td style="text-align:right">${fmtT(totBal.tc)}</td>
           <td style="text-align:right">${fmtT(totBal.rud)}</td>
           <td style="text-align:right">${fmtT(totBal.cd)}</td>
@@ -1607,14 +1603,12 @@ function openPrintWindow() {
   <!-- ═══ STRANICA 2: PRETPRODAJA ═══ -->
   <div class="page">
     <div class="doc-header">
-      <h2>JP "ŠUME FEDERACIJE BiH" d.o.o. SARAJEVO</h2>
-      <h3>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h3>
-      <h3 style="margin-top:5px">STANJE PRETPRODAJE – ${dateFmt}. GODINE</h3>
+      <h2>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h2>
+      <h3 style="margin-top:4px">STANJE PRETPRODAJE – ${dateFmt}. GODINE</h3>
     </div>
     <table>
       <thead>
         <tr>
-          <th rowspan="2" style="width:28px">R.B.</th>
           <th rowspan="2">KUPAC</th>
           <th rowspan="2" style="width:70px">ODJEL</th>
           <th rowspan="2" style="width:52px">BROJ</th>
@@ -1632,7 +1626,7 @@ function openPrintWindow() {
       </tbody>
       <tfoot>
         <tr class="total-row">
-          <td colspan="5" style="text-align:right">UKUPNO:</td>
+          <td colspan="4" style="text-align:right">UKUPNO:</td>
           <td style="text-align:right">${fmtT(ppTot.tc)}</td>
           <td style="text-align:right">${fmtT(ppTot.rud)}</td>
           <td style="text-align:right">${fmtT(ppTot.cd)}</td>
