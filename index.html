@@ -881,6 +881,29 @@ async function initFirebase() {
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('dateBadge').textContent =
     new Date().toLocaleDateString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+  scheduleAutoCleanup();
+}
+
+async function autoCleanupExhaustedDisps() {
+  const exhausted = dispozicije.filter(d => FIELDS.every(f => getBalance(d)[f] <= 0));
+  if (exhausted.length === 0) return;
+  for (const d of exhausted) await fbDelDisp(d.id);
+  showToast(`🗑️ Automatski obrisano ${exhausted.length} iscrpljenih dispozicija u 06:00h`, 'success');
+}
+
+function scheduleAutoCleanup() {
+  const tryCleanup = async () => {
+    const now = new Date();
+    const todayStr = localDateStr(now);
+    const lastRun  = localStorage.getItem('lastAutoCleanup') || '';
+    if (now.getHours() >= 6 && lastRun !== todayStr) {
+      localStorage.setItem('lastAutoCleanup', todayStr);
+      await autoCleanupExhaustedDisps();
+    }
+  };
+  tryCleanup();
+  setInterval(tryCleanup, 60000);
 }
 
 async function loadKupacList() {
@@ -1395,8 +1418,42 @@ function submitOtprema() {
 
 async function confirmOtprema() {
   if (!pendingOtp) return;
-  pendingOtp.id = 'man_' + Date.now();
-  await fbSetOtp(pendingOtp);
+  const isPP = pretprodaje.some(p => p.id === pendingOtp.disp_id);
+  if (isPP) {
+    pendingOtp.id = 'man_' + Date.now();
+    await fbSetOtp(pendingOtp);
+  } else {
+    // FIFO: rasporedi po dispozicijama od najstarije, bez minusa
+    const ku = pendingOtp.kupac.toUpperCase().trim();
+    const kandidati = dispozicije
+      .filter(d => { const dk = d.kupac.toUpperCase().trim(); return dk === ku || dk.includes(ku) || ku.includes(dk); })
+      .sort((a,b) => (a.datum||'').localeCompare(b.datum||''));
+    const batchSpent = {};
+    const splits = {};
+    for (const field of FIELDS) {
+      let remaining = pendingOtp[field] || 0;
+      if (remaining <= 0) continue;
+      for (const disp of kandidati) {
+        if (remaining <= 0) break;
+        const bal = getBalance(disp);
+        const alreadySpent = (batchSpent[disp.id] || {})[field] || 0;
+        const available = Math.max(0, bal[field] - alreadySpent);
+        if (available <= 0) continue;
+        const take = r2(Math.min(remaining, available));
+        if (!splits[disp.id])     splits[disp.id]     = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+        if (!batchSpent[disp.id]) batchSpent[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+        splits[disp.id][field]     = r2(splits[disp.id][field] + take);
+        batchSpent[disp.id][field] = r2(batchSpent[disp.id][field] + take);
+        remaining = r2(remaining - take);
+      }
+    }
+    const ts = Date.now();
+    let i = 0;
+    for (const [disp_id, qtys] of Object.entries(splits)) {
+      if (!FIELDS.some(f => qtys[f] > 0)) continue;
+      await fbSetOtp({ id: 'man_' + (ts + i++), kupac: pendingOtp.kupac, disp_id, datum: pendingOtp.datum, broj: pendingOtp.broj, source: 'manual', ...qtys });
+    }
+  }
   pendingOtp = null;
   closeModal();
   clearOtprema();
@@ -2098,6 +2155,7 @@ async function doSync() {
 
       const batchSpent = {};
       const splits     = {};
+      const overflow   = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
 
       for (const field of FIELDS) {
         let remaining = qtyRow[field];
@@ -2115,11 +2173,16 @@ async function doSync() {
           batchSpent[disp.id][field] = r2(batchSpent[disp.id][field] + take);
           remaining = r2(remaining - take);
         }
-        if (remaining > 0) {
-          const lastDisp = kandidati[kandidati.length - 1];
-          if (!splits[lastDisp.id]) splits[lastDisp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-          splits[lastDisp.id][field] += remaining;
-        }
+        if (remaining > 0) overflow[field] = r2(overflow[field] + remaining);
+      }
+      if (FIELDS.some(f => overflow[f] > 0)) {
+        const id = 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+        batchDocs.push({ id, data: {
+          id, sheet_key: `${rowKey}_ov`, source: 'sheet',
+          kupac: kupacRaw, disp_id: null, unmatched: true,
+          datum, broj: cs(row, 'OTPREMAČ') || '', ...overflow
+        }});
+        newCount++;
       }
 
       const dispIds = Object.keys(splits);
