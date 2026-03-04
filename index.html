@@ -722,6 +722,7 @@ const SHEET_NAME = 'INDEKS_OTPREMA';
 const BAZA_SHEET = 'SPISAK KUPACA';
 const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
+const r2 = x => Math.round(x * 100) / 100;
 
 // Mapiranje kolona INDEKS_OTPREMA → pretprodaja klasa → polje
 const PP_KLASA_MAP = [
@@ -948,7 +949,7 @@ function getBalance(disp) {
     .filter(o => o.disp_id === disp.id && (!o.datum || o.datum <= _todayStr))
     .forEach(o => { FIELDS.forEach(f => spent[f] += (o[f]||0)); });
   const bal = {};
-  FIELDS.forEach(f => bal[f] = (disp[f]||0) - spent[f]);
+  FIELDS.forEach(f => bal[f] = r2((disp[f]||0) - spent[f]));
   return bal;
 }
 
@@ -1519,7 +1520,7 @@ function renderHistorija() {
         const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
         const isPretp  = !!(ppEntry || o.klasa);
         const vals     = FIELDS.filter(f=>o[f]>0)
-          .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${o[f]} m³</div></div>`).join('');
+          .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${r2(o[f]).toFixed(2)} m³</div></div>`).join('');
         const srcBadge = o.source==='sheet'
           ? '<span class="badge blue">📊 Sheet</span>'
           : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
@@ -1884,12 +1885,12 @@ async function doSync() {
           const alreadySpent = (batchSpent[disp.id] || {})[field] || 0;
           const available    = Math.max(0, bal[field] - alreadySpent);
           if (available <= 0) continue;
-          const take = Math.min(remaining, available);
+          const take = r2(Math.min(remaining, available));
           if (!splits[disp.id])     splits[disp.id]     = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
           if (!batchSpent[disp.id]) batchSpent[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-          splits[disp.id][field]     += take;
-          batchSpent[disp.id][field] += take;
-          remaining -= take;
+          splits[disp.id][field]     = r2(splits[disp.id][field]     + take);
+          batchSpent[disp.id][field] = r2(batchSpent[disp.id][field] + take);
+          remaining = r2(remaining - take);
         }
         if (remaining > 0) {
           const lastDisp = kandidati[kandidati.length - 1];
