@@ -249,6 +249,8 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   .mnav-btn .mnl{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
   .mnav-btn.active{color:var(--accent);}
   .mnav-btn.active .mni{filter:drop-shadow(0 0 4px var(--accent));}
+  #installBtn{display:none;color:#f0c040;}
+  #installBtn.visible{display:flex;}
 
   /* Status bar */
   .status-bar{gap:10px;padding:10px 12px;overflow-x:auto;flex-wrap:nowrap;}
@@ -722,6 +724,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   </button>
   <button class="mnav-btn" data-tab="historija" onclick="switchTab('historija')">
     <span class="mni">📜</span><span class="mnl">Otpreme</span>
+  </button>
+  <button class="mnav-btn" id="installBtn" onclick="pwaInstall()">
+    <span class="mni">📲</span><span class="mnl">Instaliraj</span>
   </button>
 </nav>
 
@@ -2710,6 +2715,24 @@ if (window._firebaseReady) initFirebase();
 // Registracija Service Workera za PWA install
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+
+// PWA install prompt
+let _pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  document.getElementById('installBtn')?.classList.add('visible');
+});
+window.addEventListener('appinstalled', () => {
+  _pwaPrompt = null;
+  document.getElementById('installBtn')?.classList.remove('visible');
+});
+function pwaInstall() {
+  if (!_pwaPrompt) return;
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(() => { _pwaPrompt = null; });
+  document.getElementById('installBtn')?.classList.remove('visible');
 }
 </script>
 </body>
