@@ -316,6 +316,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <span class="spinner-sm" id="syncSpinner" style="display:none"></span>
       🔄 Dodaj otpremu
     </button>
+    <button class="sync-btn" id="installBtnHeader" onclick="pwaInstall()" style="background:#7c5c00;display:none;" title="Instaliraj aplikaciju">📲 Instaliraj</button>
     <div class="date-badge" id="dateBadge"></div>
   </div>
 </header>
@@ -2719,20 +2720,34 @@ if ('serviceWorker' in navigator) {
 
 // PWA install prompt
 let _pwaPrompt = null;
+
+function _pwaShowBtns() {
+  document.getElementById('installBtn')?.classList.add('visible');
+  const h = document.getElementById('installBtnHeader');
+  if (h) h.style.display = '';
+}
+function _pwaHideBtns() {
+  document.getElementById('installBtn')?.classList.remove('visible');
+  const h = document.getElementById('installBtnHeader');
+  if (h) h.style.display = 'none';
+}
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   _pwaPrompt = e;
-  document.getElementById('installBtn')?.classList.add('visible');
+  _pwaShowBtns();
 });
 window.addEventListener('appinstalled', () => {
   _pwaPrompt = null;
-  document.getElementById('installBtn')?.classList.remove('visible');
+  _pwaHideBtns();
 });
 function pwaInstall() {
-  if (!_pwaPrompt) return;
+  if (!_pwaPrompt) {
+    alert('Aplikacija je već instalirana ili je instalacija nedostupna u ovom browseru.');
+    return;
+  }
   _pwaPrompt.prompt();
-  _pwaPrompt.userChoice.then(() => { _pwaPrompt = null; });
-  document.getElementById('installBtn')?.classList.remove('visible');
+  _pwaPrompt.userChoice.then(() => { _pwaPrompt = null; _pwaHideBtns(); });
 }
 </script>
 </body>
