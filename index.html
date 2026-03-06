@@ -596,14 +596,6 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <div id="histDispList"></div>
   </div>
 
-  <!-- ISCRPLJENE DISPOZICIJE -->
-  <div id="tab-iscrpljene" class="panel">
-    <div class="search-bar">
-      <input type="text" id="iscSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderIscrpljene()">
-    </div>
-    <div id="iscrpljenList"></div>
-  </div>
-
   <!-- HISTORIJA -->
   <div id="tab-historija" class="panel">
     <div class="search-bar">
@@ -614,6 +606,14 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <button class="btn btn-danger" id="btnDeleteAll" onclick="deleteAllOtp()" style="margin-left:auto">🗑 Obriši sve</button>
     </div>
     <div id="historijaList"></div>
+  </div>
+
+  <!-- ISCRPLJENE DISPOZICIJE -->
+  <div id="tab-iscrpljene" class="panel">
+    <div class="search-bar">
+      <input type="text" id="iscSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderIscrpljene()">
+    </div>
+    <div id="iscrpljenList"></div>
   </div>
 </main>
 
