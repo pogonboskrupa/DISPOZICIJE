@@ -1060,17 +1060,19 @@ function isReplaced(disp) {
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
   const bal = getBalance(disp);
-  // Svi sortimenti moraju biti iscrpljeni (nula ili minus)
+  // Svi sortimenti moraju biti na nuli ili u minusu
   if (!coveredFields.every(f => bal[f] <= 0)) return false;
-  // Za svaki sortiment, kupac mora imati drugu dispoziciju s pozitivnim ostatkom
-  return coveredFields.every(f =>
-    dispozicije.some(other =>
+  // Za svaki sortiment: kupac mora imati drugu dispoziciju čiji ostatak
+  // je VEĆI od duga (ako je minus -5, nova mora imati > 5 da pokrije dug)
+  return coveredFields.every(f => {
+    const dug = Math.max(0, -bal[f]); // 0 ako je nula, pozitivno ako je minus
+    return dispozicije.some(other =>
       other.id !== disp.id &&
       other.kupac === disp.kupac &&
       (other[f]||0) > 0 &&
-      getBalance(other)[f] > 0
-    )
-  );
+      getBalance(other)[f] > dug  // nova mora pokriti dug
+    );
+  });
 }
 
 // ═══════════════════════════════════════════════════════
