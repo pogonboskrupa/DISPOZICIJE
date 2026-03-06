@@ -932,7 +932,8 @@ async function fbDelArchive(id) {
 }
 
 async function autoCleanupExhaustedDisps() {
-  const exhausted = dispozicije.filter(d => FIELDS.every(f => getBalance(d)[f] <= 0));
+  // Arhiviraj samo dispozicije koje su iscrpljene I zamijenjene drugom dispozicijom istog kupca za isti sortiment
+  const exhausted = dispozicije.filter(d => isReplaced(d));
   for (const d of exhausted) {
     await fbArchiveDisp(d);
     await fbDelDisp(d.id);
@@ -1052,6 +1053,26 @@ function isRecentlyExhausted(disp) {
   return otpreme.some(o => o.disp_id === disp.id && (o.datum||'') >= yesterdayStr);
 }
 
+// Provjeri je li dispozicija "iscrpljena i zamijenjena":
+// sve polja s originalnom kolicinom moraju biti <= 0
+// I kupac mora imati drugu aktivnu dispoziciju s pozitivnim ostatkom za SVAKI isti sortiment
+function isReplaced(disp) {
+  const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
+  if (coveredFields.length === 0) return false;
+  const bal = getBalance(disp);
+  // Svi sortimenti moraju biti iscrpljeni (nula ili minus)
+  if (!coveredFields.every(f => bal[f] <= 0)) return false;
+  // Za svaki sortiment, kupac mora imati drugu dispoziciju s pozitivnim ostatkom
+  return coveredFields.every(f =>
+    dispozicije.some(other =>
+      other.id !== disp.id &&
+      other.kupac === disp.kupac &&
+      (other[f]||0) > 0 &&
+      getBalance(other)[f] > 0
+    )
+  );
+}
+
 // ═══════════════════════════════════════════════════════
 //  RENDER – PREGLED
 // ═══════════════════════════════════════════════════════
@@ -1103,8 +1124,9 @@ function renderPregled() {
         !(d.ugovor||'').toLowerCase().includes(search) &&
         !(d.broj||'').toLowerCase().includes(search)) return;
     const st = balStatus(d);
-    if (st === 'empty' || st === 'done') return; // iscrpljene su u zasebnom tabu
-    // 'over' uvijek prikaži dok minus nije pokriven
+    if (st === 'empty') return; // bez definiranih kolicina — ignoriraj
+    if (isReplaced(d)) return;  // iscrpljena I zamijenjena — ide u zasebni tab
+    // 'over' (minus bez zamjene) i sve ostalo ostaje u pregledu
     (grouped[d.kupac] = grouped[d.kupac]||[]).push(d);
   });
 
@@ -2707,11 +2729,9 @@ function renderIscrpljene() {
       (d.ugovor||'').toLowerCase().includes(search);
   });
 
-  // Iz aktivnih dispozicija koje su iscrpljene ali još nisu arhivirane (do 06:00)
+  // Iz aktivnih dispozicija koje su iscrpljene+zamijenjene ali još nisu arhivirane (do 06:00)
   const fromActive = dispozicije.filter(d => {
-    const st = balStatus(d);
-    if (st !== 'done' && st !== 'empty') return false;
-    // Provjeri da nije već u arhivi
+    if (!isReplaced(d)) return false;
     if (arhiva.find(a => a.id === d.id)) return false;
     return !search ||
       (d.kupac||'').toLowerCase().includes(search) ||
