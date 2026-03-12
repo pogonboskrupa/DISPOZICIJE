@@ -1578,9 +1578,8 @@ function openPrintWindow() {
   const dateFmt = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}.${today.getFullYear()}`;
 
   // ─── Stranica 1: DISPOZICIJE ───────────────────────────
-  // Grupiraj aktivne dispozicije po kupcu
-  const active = dispozicije.filter(d => balStatus(d) !== 'done' && balStatus(d) !== 'over');
-  const allDisp = dispozicije; // svaka dispozicija
+  // Isti filter kao u pregledu: sakrij empty i iscrpljene+zamijenjene
+  const allDisp = dispozicije.filter(d => balStatus(d) !== 'empty' && !isReplaced(d));
   const grouped = {};
   allDisp.forEach(d => { (grouped[d.kupac] = grouped[d.kupac] || []).push(d); });
   const kupci = Object.keys(grouped).sort();
