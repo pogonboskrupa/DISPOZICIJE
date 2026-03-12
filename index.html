@@ -782,6 +782,7 @@ let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -2803,7 +2804,7 @@ function toggleDesktopView(isDesktop) {
 }
 
 function switchTab(t) {
-  const names = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene'];
+  const names = TAB_NAMES;
   document.querySelectorAll('.tab').forEach((el,i)   => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.panel').forEach((el,i) => el.classList.toggle('active', names[i]===t));
   document.querySelectorAll('.mnav-btn[data-tab]').forEach(btn => btn.classList.toggle('active', btn.dataset.tab===t));
@@ -2827,7 +2828,7 @@ function renderAll() {
   const active = document.querySelector('.tab.active');
   if (!active) return;
   const idx = [...document.querySelectorAll('.tab')].indexOf(active);
-  const names = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene'];
+  const names = TAB_NAMES;
   if (names[idx]==='pregled')     renderPregled();
   if (names[idx]==='pretprodaja') renderPretprodaja();
   if (names[idx]==='hist-disp')   renderHistDisp();
@@ -2838,6 +2839,7 @@ function renderAll() {
 let toastTimer;
 function showToast(msg, type='success') {
   const t = document.getElementById('toast');
+  if (!t) { console.warn('showToast:', msg); return; }
   t.textContent = msg;
   t.className   = 'toast ' + type + ' show';
   clearTimeout(toastTimer);
