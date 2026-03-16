@@ -2447,10 +2447,9 @@ function renderPretprodaja() {
         const bal = getBalance(p);
         FIELDS.forEach(f => { kOrig[f] = r2(kOrig[f] + (p[f]||0)); kBal[f] = r2(kBal[f] + bal[f]); });
       });
-      const btns = entries.map(p =>
-        `<button class="del-disp-btn" onclick="editPP('${p.id}')" title="Uredi ${p.broj||''}" style="margin-right:2px">✏️</button>` +
-        `<button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši ${p.broj||''}">🗑</button>`
-      ).join('');
+      const last = entries.at(-1);
+      const btns = `<button class="del-disp-btn" onclick="editPP('${last.id}')" title="Uredi" style="margin-right:2px">✏️</button>` +
+        `<button class="del-disp-btn" onclick="deletePretprodajaEntry('${last.id}')" title="Obriši">🗑</button>`;
       html += `<tr class="kupac-first">
         <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${klasa}</td>
         <td style="border-left:2px solid var(--border)">${kOrig.tc  ? fmtBal(kBal.tc,  kOrig.tc)  : ''}</td>
