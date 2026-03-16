@@ -1553,7 +1553,7 @@ function checkPPOnDate() {
   if (!datum || !el) return;
   const hasPP = otpreme.some(o =>
     o.datum === datum &&
-    (o.klasa || pretprodaje.some(p => p.id === o.disp_id))
+    pretprodaje.some(p => p.id === o.disp_id)
   );
   el.style.display = hasPP ? '' : 'none';
 }
@@ -1799,7 +1799,7 @@ function renderHistorija() {
   const list       = document.getElementById('historijaList');
 
   // Helper: je li otprema iz pretprodaje?
-  const isPP = o => !!(o.klasa || pretprodaje.some(p => p.id === o.disp_id));
+  const isPP = o => pretprodaje.some(p => p.id === o.disp_id);
 
   let filtered = [...otpreme].filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
@@ -1879,7 +1879,7 @@ function renderHistorija() {
       dayOtpreme.forEach(o => {
         const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
         const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
-        const isPretp  = !!(ppEntry || o.klasa);
+        const isPretp  = !!ppEntry;
         const vals     = FIELDS.filter(f=>o[f]>0)
           .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${r2(o[f]).toFixed(2)} m³</div></div>`).join('');
         const srcBadge = o.source==='sheet'
@@ -1932,7 +1932,7 @@ async function deleteAllOtp() {
   const onlySheet  = document.getElementById('hOnlySheet')?.checked;
   const onlyManual = document.getElementById('hOnlyManual')?.checked;
   const onlyPP     = document.getElementById('hOnlyPP')?.checked;
-  const isPP = o => !!(o.klasa || pretprodaje.some(p => p.id === o.disp_id));
+  const isPP = o => pretprodaje.some(p => p.id === o.disp_id);
   const filtered = otpreme.filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
     if (onlyManual && o.source==='sheet') return false;
