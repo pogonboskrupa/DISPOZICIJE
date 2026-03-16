@@ -1401,7 +1401,12 @@ function renderOtprema() {
   const allSrc = [...new Set([...src, ...ppKupci])].sort();
   sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
     allSrc.map(k=>`<option value="${k}">${k}</option>`).join('');
-  document.getElementById('o_datum').value = localDateStr();
+  const oDatumEl = document.getElementById('o_datum');
+  if (!oDatumEl.value) {
+    const d = new Date();
+    if (d.getDay() === 0) d.setDate(d.getDate() - 2); // nedjelja → petak
+    oDatumEl.value = localDateStr(d);
+  }
 }
 
 function loadKupacDisp() {
@@ -1553,7 +1558,8 @@ function clearOtprema() {
   document.getElementById('o_kupac').value = '';
   document.getElementById('o_disp').innerHTML = '<option value="">— Odaberi dispoziciju —</option>';
   document.getElementById('o_broj').value = '';
-  document.getElementById('o_datum').value = localDateStr();
+  const _cd = new Date(); if (_cd.getDay() === 0) _cd.setDate(_cd.getDate() - 2);
+  document.getElementById('o_datum').value = localDateStr(_cd);
   FIELDS.forEach(f => document.getElementById('o_'+f).value = '');
   document.getElementById('availWrap').style.display = 'none';
   document.getElementById('oWarn').textContent = '';
