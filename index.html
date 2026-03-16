@@ -2433,22 +2433,35 @@ function renderPretprodaja() {
           </thead>
           <tbody>`;
 
+    // Grupiraj redove po klasi — isti sortiment se prikazuje u jednom redu
+    const klasaMap = {};
     rows.forEach(p => {
-      const bal = getBalance(p);
-      html += `<tr id="pp-row-${p.id}" class="kupac-first">
-        <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${p.klasa||'—'}</td>
-        <td style="border-left:2px solid var(--border)">${p.tc  ? fmtBal(bal.tc,  p.tc)  : ''}</td>
-        <td>${p.rud ? fmtBal(bal.rud, p.rud) : ''}</td>
-        <td>${p.cd  ? fmtBal(bal.cd,  p.cd)  : ''}</td>
-        <td>${p.cc  ? fmtBal(bal.cc,  p.cc)  : ''}</td>
-        <td style="border-left:2px solid var(--border)">${p.tl  ? fmtBal(bal.tl,  p.tl)  : ''}</td>
-        <td>${p.fl  ? fmtBal(bal.fl,  p.fl)  : ''}</td>
-        <td>${p.oc  ? fmtBal(bal.oc,  p.oc)  : ''}</td>
-        <td>${p.od  ? fmtBal(bal.od,  p.od)  : ''}</td>
-        <td style="white-space:nowrap">
-          <button class="del-disp-btn" onclick="editPP('${p.id}')" title="Uredi" style="margin-right:2px">✏️</button>
-          <button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši">🗑</button>
-        </td>
+      const k = p.klasa || '—';
+      if (!klasaMap[k]) klasaMap[k] = [];
+      klasaMap[k].push(p);
+    });
+    Object.entries(klasaMap).forEach(([klasa, entries]) => {
+      const kOrig = {}; const kBal = {};
+      FIELDS.forEach(f => { kOrig[f] = 0; kBal[f] = 0; });
+      entries.forEach(p => {
+        const bal = getBalance(p);
+        FIELDS.forEach(f => { kOrig[f] = r2(kOrig[f] + (p[f]||0)); kBal[f] = r2(kBal[f] + bal[f]); });
+      });
+      const btns = entries.map(p =>
+        `<button class="del-disp-btn" onclick="editPP('${p.id}')" title="Uredi ${p.broj||''}" style="margin-right:2px">✏️</button>` +
+        `<button class="del-disp-btn" onclick="deletePretprodajaEntry('${p.id}')" title="Obriši ${p.broj||''}">🗑</button>`
+      ).join('');
+      html += `<tr class="kupac-first">
+        <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${klasa}</td>
+        <td style="border-left:2px solid var(--border)">${kOrig.tc  ? fmtBal(kBal.tc,  kOrig.tc)  : ''}</td>
+        <td>${kOrig.rud ? fmtBal(kBal.rud, kOrig.rud) : ''}</td>
+        <td>${kOrig.cd  ? fmtBal(kBal.cd,  kOrig.cd)  : ''}</td>
+        <td>${kOrig.cc  ? fmtBal(kBal.cc,  kOrig.cc)  : ''}</td>
+        <td style="border-left:2px solid var(--border)">${kOrig.tl  ? fmtBal(kBal.tl,  kOrig.tl)  : ''}</td>
+        <td>${kOrig.fl  ? fmtBal(kBal.fl,  kOrig.fl)  : ''}</td>
+        <td>${kOrig.oc  ? fmtBal(kBal.oc,  kOrig.oc)  : ''}</td>
+        <td>${kOrig.od  ? fmtBal(kBal.od,  kOrig.od)  : ''}</td>
+        <td style="white-space:nowrap">${btns}</td>
       </tr>`;
     });
 
