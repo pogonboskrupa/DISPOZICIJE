@@ -2379,14 +2379,16 @@ function renderPretprodaja() {
   // Grupiraj po (kupac|broj|odjel)
   const grouped = {};
   pretprodaje.forEach(p => {
-    const key = `${p.kupac}|${p.broj||''}|${p.odjel||''}`;
+    const key = `${p.kupac}|${p.odjel||''}`;
     (grouped[key] = grouped[key]||[]).push(p);
   });
 
   let html = '';
   Object.entries(grouped).forEach(([key, rows], gi) => {
     const r0 = rows[0];
-    const datFmt = r0.datum ? r0.datum.split('-').reverse().join('.') : '—';
+    const sviBrojevi = [...new Set(rows.map(p => p.broj).filter(Boolean))];
+    const najNovijDatum = rows.map(p => p.datum).filter(Boolean).sort().at(-1);
+    const datFmt = najNovijDatum ? najNovijDatum.split('-').reverse().join('.') : '—';
 
     // Totali po grupama
     const totOrig = {}; const totBal = {};
@@ -2401,7 +2403,7 @@ function renderPretprodaja() {
       <!-- Header licitacije -->
       <div style="background:var(--surface2);padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid var(--accent)">
         <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
-        <span style="font-size:13px;color:var(--muted)">Br: <strong style="color:var(--text)">${r0.broj||'—'}</strong></span>
+        <span style="font-size:13px;color:var(--muted)">Disp: <strong style="color:var(--text)">${sviBrojevi.length ? sviBrojevi.join(' · ') : '—'}</strong></span>
         <span style="font-size:13px;color:var(--muted)">${datFmt}</span>
         ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
         ${r0.ugovor ? `<span style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${r0.ugovor}</strong></span>` : ''}
