@@ -1524,11 +1524,23 @@ async function confirmOtprema() {
         splits[lastDisp.id][field] = r2(splits[lastDisp.id][field] + remaining);
       }
     }
+    // Zapamti salde PRIJE pisanja (izbjegava race condition s real-time listenerom)
+    const preBalances = {};
+    for (const disp of kandidati) preBalances[disp.id] = getBalance(disp);
+
     const ts = Date.now();
     let i = 0;
     for (const [disp_id, qtys] of Object.entries(splits)) {
       if (!FIELDS.some(f => qtys[f] > 0)) continue;
       await fbSetOtp({ id: 'man_' + (ts + i++), kupac: pendingOtp.kupac, disp_id, datum: pendingOtp.datum, broj: pendingOtp.broj, source: 'manual', ...qtys });
+    }
+
+    // Auto-brisanje exhausted dispozicija (saldo ≤ 0 na svim poljima)
+    for (const [disp_id, qtys] of Object.entries(splits)) {
+      const preBal = preBalances[disp_id];
+      if (!preBal) continue;
+      const remainingTotal = FIELDS.reduce((s, f) => s + r2((preBal[f] || 0) - (qtys[f] || 0)), 0);
+      if (remainingTotal <= 0) await fbDelDisp(disp_id);
     }
   }
   pendingOtp = null;
