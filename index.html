@@ -1645,13 +1645,14 @@ function openPrintWindow() {
   const ppKeys = Object.keys(ppGrouped).sort();
 
   let ppRows = '';
-  let pprb = 1;
+  const ppTot  = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+  const ppOrig = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   ppKeys.forEach(key => {
     const rows = ppGrouped[key];
     const r0   = rows[0];
     rows.forEach((p, i) => {
-      const bal  = getBalance(p);
-      const fmtV = v => v ? v.toFixed(2) : '';
+      const bal = getBalance(p);
+      FIELDS.forEach(f => { ppTot[f] = r2(ppTot[f] + bal[f]); ppOrig[f] = r2(ppOrig[f] + (p[f]||0)); });
       ppRows += `<tr>
         ${i === 0
           ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${r0.kupac}</td>
@@ -1659,22 +1660,16 @@ function openPrintWindow() {
              <td rowspan="${rows.length}" style="vertical-align:middle;text-align:center">${r0.broj||''}</td>`
           : ''}
         <td style="text-align:center">${p.klasa||''}</td>
-        <td style="text-align:right">${fmtV(bal.tc)}</td>
-        <td style="text-align:right">${fmtV(bal.rud)}</td>
-        <td style="text-align:right">${fmtV(bal.cd)}</td>
-        <td style="text-align:right">${fmtV(bal.cc)}</td>
-        <td style="text-align:right">${fmtV(bal.tl)}</td>
-        <td style="text-align:right">${fmtV(bal.fl)}</td>
-        <td style="text-align:right">${fmtV(bal.oc)}</td>
-        <td style="text-align:right">${fmtV(bal.od)}</td>
+        <td style="text-align:right">${fmtP(bal.tc,  p.tc)}</td>
+        <td style="text-align:right">${fmtP(bal.rud, p.rud)}</td>
+        <td style="text-align:right">${fmtP(bal.cd,  p.cd)}</td>
+        <td style="text-align:right">${fmtP(bal.cc,  p.cc)}</td>
+        <td style="text-align:right">${fmtP(bal.tl,  p.tl)}</td>
+        <td style="text-align:right">${fmtP(bal.fl,  p.fl)}</td>
+        <td style="text-align:right">${fmtP(bal.oc,  p.oc)}</td>
+        <td style="text-align:right">${fmtP(bal.od,  p.od)}</td>
       </tr>`;
     });
-  });
-
-  const ppTot = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  pretprodaje.forEach(p => {
-    const b = getBalance(p);
-    FIELDS.forEach(f => ppTot[f] = r2(ppTot[f] + b[f]));
   });
 
   const css = `
@@ -1778,14 +1773,14 @@ function openPrintWindow() {
       <tfoot>
         <tr class="total-row">
           <td colspan="4" style="text-align:right">UKUPNO:</td>
-          <td style="text-align:right">${fmtT(ppTot.tc)}</td>
-          <td style="text-align:right">${fmtT(ppTot.rud)}</td>
-          <td style="text-align:right">${fmtT(ppTot.cd)}</td>
-          <td style="text-align:right">${fmtT(ppTot.cc)}</td>
-          <td style="text-align:right">${fmtT(ppTot.tl)}</td>
-          <td style="text-align:right">${fmtT(ppTot.fl)}</td>
-          <td style="text-align:right">${fmtT(ppTot.oc)}</td>
-          <td style="text-align:right">${fmtT(ppTot.od)}</td>
+          <td style="text-align:right">${fmtT(ppTot.tc,  ppOrig.tc)}</td>
+          <td style="text-align:right">${fmtT(ppTot.rud, ppOrig.rud)}</td>
+          <td style="text-align:right">${fmtT(ppTot.cd,  ppOrig.cd)}</td>
+          <td style="text-align:right">${fmtT(ppTot.cc,  ppOrig.cc)}</td>
+          <td style="text-align:right">${fmtT(ppTot.tl,  ppOrig.tl)}</td>
+          <td style="text-align:right">${fmtT(ppTot.fl,  ppOrig.fl)}</td>
+          <td style="text-align:right">${fmtT(ppTot.oc,  ppOrig.oc)}</td>
+          <td style="text-align:right">${fmtT(ppTot.od,  ppOrig.od)}</td>
         </tr>
       </tfoot>
     </table>
@@ -2472,7 +2467,7 @@ function renderPretprodaja() {
       const last = entries.at(-1);
       const btns = `<button class="del-disp-btn" onclick="editPP('${last.id}')" title="Uredi" style="margin-right:2px">✏️</button>` +
         `<button class="del-disp-btn" onclick="deletePretprodajaEntry('${last.id}')" title="Obriši">🗑</button>`;
-      html += `<tr class="kupac-first">
+      html += `<tr id="pp-row-${last.id}" class="kupac-first">
         <td style="text-align:left;font-weight:600;color:var(--text);white-space:nowrap">${klasa}</td>
         <td style="border-left:2px solid var(--border)">${kOrig.tc  ? fmtBal(kBal.tc,  kOrig.tc)  : ''}</td>
         <td>${kOrig.rud ? fmtBal(kBal.rud, kOrig.rud) : ''}</td>
