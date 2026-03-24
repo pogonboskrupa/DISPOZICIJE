@@ -1594,8 +1594,18 @@ function openPrintWindow() {
   allDisp.forEach(d => { (grouped[d.kupac] = grouped[d.kupac] || []).push(d); });
   const kupci = Object.keys(grouped).sort();
 
+  // Ista logika bojenja kao fmtBal u tabu, ali bez progress bara (print-friendly)
+  const fmtP = (bal, orig) => {
+    if (!orig) return '';
+    const v = parseFloat(bal.toFixed(2));
+    const o = parseFloat(orig.toFixed(2));
+    const col = v < 0 ? 'color:#cc0000;font-weight:700' : v < o * 0.2 ? 'color:#b56000;font-weight:700' : 'font-weight:600';
+    return `<span style="${col}">${v.toFixed(2)}</span>`;
+  };
+
   let dispRows = '';
-  let rb = 1;
+  const totBal  = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+  const totOrig = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
   kupci.forEach(kupac => {
     const rows = grouped[kupac];
     rows.forEach((d, i) => {
@@ -1604,33 +1614,27 @@ function openPrintWindow() {
       const cls  = balStatus(d);
       const rowStyle = cls === 'over'
         ? 'background:#fff0f0'
-        : cls === 'done' ? 'color:#aaa;background:#f8f8f8'
+        : cls === 'done' ? 'color:#999;background:#f8f8f8'
         : cls === 'low'  ? 'background:#fffde7' : '';
-      const fmtV = v => v !== 0 ? v.toFixed(2) : '';
+      FIELDS.forEach(f => { totBal[f] = r2(totBal[f] + bal[f]); totOrig[f] = r2(totOrig[f] + (d[f]||0)); });
       dispRows += `<tr style="${rowStyle}">
         ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${kupac}</td>` : ''}
         <td style="text-align:center">${d.broj||''}</td>
         <td style="text-align:center">${dat}</td>
-        <td style="text-align:right">${fmtV(bal.tc)}</td>
-        <td style="text-align:right">${fmtV(bal.rud)}</td>
-        <td style="text-align:right">${fmtV(bal.cd)}</td>
-        <td style="text-align:right">${fmtV(bal.cc)}</td>
-        <td style="text-align:right">${fmtV(bal.tl)}</td>
-        <td style="text-align:right">${fmtV(bal.fl)}</td>
-        <td style="text-align:right">${fmtV(bal.oc)}</td>
-        <td style="text-align:right">${fmtV(bal.od)}</td>
+        <td style="text-align:right">${fmtP(bal.tc,  d.tc)}</td>
+        <td style="text-align:right">${fmtP(bal.rud, d.rud)}</td>
+        <td style="text-align:right">${fmtP(bal.cd,  d.cd)}</td>
+        <td style="text-align:right">${fmtP(bal.cc,  d.cc)}</td>
+        <td style="text-align:right">${fmtP(bal.tl,  d.tl)}</td>
+        <td style="text-align:right">${fmtP(bal.fl,  d.fl)}</td>
+        <td style="text-align:right">${fmtP(bal.oc,  d.oc)}</td>
+        <td style="text-align:right">${fmtP(bal.od,  d.od)}</td>
         <td>${d.ugovor||''}</td>
       </tr>`;
     });
   });
 
-  // Ukupni zbir stanja
-  const totBal = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-  allDisp.forEach(d => {
-    const b = getBalance(d);
-    FIELDS.forEach(f => totBal[f] = r2(totBal[f] + b[f]));
-  });
-  const fmtT = v => v ? `<strong>${v.toFixed(2)}</strong>` : '';
+  const fmtT = (bal, orig) => orig ? `<strong>${bal.toFixed(2)}</strong>` : '';
 
   // ─── Stranica 2: PRETPRODAJA ───────────────────────────
   const ppGrouped = {};
@@ -1729,14 +1733,14 @@ function openPrintWindow() {
       <tfoot>
         <tr class="total-row">
           <td colspan="3" style="text-align:right">UKUPNO:</td>
-          <td style="text-align:right">${fmtT(totBal.tc)}</td>
-          <td style="text-align:right">${fmtT(totBal.rud)}</td>
-          <td style="text-align:right">${fmtT(totBal.cd)}</td>
-          <td style="text-align:right">${fmtT(totBal.cc)}</td>
-          <td style="text-align:right">${fmtT(totBal.tl)}</td>
-          <td style="text-align:right">${fmtT(totBal.fl)}</td>
-          <td style="text-align:right">${fmtT(totBal.oc)}</td>
-          <td style="text-align:right">${fmtT(totBal.od)}</td>
+          <td style="text-align:right">${fmtT(totBal.tc,  totOrig.tc)}</td>
+          <td style="text-align:right">${fmtT(totBal.rud, totOrig.rud)}</td>
+          <td style="text-align:right">${fmtT(totBal.cd,  totOrig.cd)}</td>
+          <td style="text-align:right">${fmtT(totBal.cc,  totOrig.cc)}</td>
+          <td style="text-align:right">${fmtT(totBal.tl,  totOrig.tl)}</td>
+          <td style="text-align:right">${fmtT(totBal.fl,  totOrig.fl)}</td>
+          <td style="text-align:right">${fmtT(totBal.oc,  totOrig.oc)}</td>
+          <td style="text-align:right">${fmtT(totBal.od,  totOrig.od)}</td>
           <td></td>
         </tr>
       </tfoot>
