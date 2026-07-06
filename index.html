@@ -625,13 +625,14 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <input type="date" id="rasp_datum" onchange="renderRaspored()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:14px">
     </div>
     <div style="overflow-x:auto">
-      <table class="disp-table" style="width:100%;min-width:580px">
+      <table class="disp-table" style="width:100%;min-width:760px">
         <thead>
           <tr>
-            <th style="width:160px">Odjel</th>
-            <th style="width:130px">Sortiment</th>
-            <th style="width:200px">Kupac (dogovoreni)</th>
-            <th style="width:180px">Auto-prijedlog</th>
+            <th style="width:150px">Odjel</th>
+            <th style="width:120px">Sortiment</th>
+            <th style="width:180px">Kupac (dogovoreni)</th>
+            <th style="width:230px">Dispozicija (broj · ugovor · stanje)</th>
+            <th style="width:170px">Auto-prijedlog</th>
             <th style="width:40px"></th>
           </tr>
         </thead>
@@ -639,7 +640,11 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </table>
     </div>
     <datalist id="rasp_odjel_list"></datalist>
-    <button class="btn btn-primary" onclick="addRasporedRow()" style="margin-top:14px">+ Dodaj kamion</button>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="addRasporedRow()">+ Dodaj kamion</button>
+      <button class="btn btn-ghost" onclick="printRaspored()">🖨 Štampaj za poslovođe</button>
+      <button class="btn btn-ghost" onclick="copyRaspored()">📋 Kopiraj za poruku</button>
+    </div>
   </div>
 </main>
 
@@ -2895,6 +2900,20 @@ function autoSuggest(sortimentField) {
   return candidates[0] || null;
 }
 
+// Najstarija dispozicija odabranog kupca s pozitivnim stanjem za sortiment (FIFO — nju otprema prazni)
+function raspDispInfo(kupac, sortimentField) {
+  if (!kupac || !sortimentField) return null;
+  const ku = kupac.toUpperCase().trim();
+  const candidates = dispozicije
+    .filter(d => (d.kupac||'').toUpperCase().trim() === ku && getBalance(d)[sortimentField] > 0)
+    .sort((a, b) => (a.datum||'').localeCompare(b.datum||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  const disp = candidates[0];
+  if (!disp) return null;
+  return { disp, bal: getBalance(disp)[sortimentField] };
+}
+
+const raspDatumFmt = ds => ds ? ds.split('-').reverse().join('.') : '';
+
 function renderRaspored() {
   const datInput = document.getElementById('rasp_datum');
   if (datInput && !datInput.value) {
@@ -2916,38 +2935,38 @@ function renderRaspored() {
   const rows = rasporedRows.filter(r => r.datum === datum).sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
 
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Nema unosa za ovaj dan. Kliknite "+ Dodaj kamion".</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Nema unosa za ovaj dan. Kliknite "+ Dodaj kamion".</td></tr>`;
     return;
   }
 
   tbody.innerHTML = rows.map(r => {
     const sug = autoSuggest(r.sortiment);
-    const sugText = sug ? sug.kupac : '—';
+    const sugText = sug
+      ? `${sug.kupac}<div style="font-size:11px;color:var(--muted);font-weight:400">${sug.broj||''} · ${getBalance(sug)[r.sortiment].toFixed(2)} m³ · ${raspDatumFmt(sug.datum)}</div>`
+      : '—';
     const sugStyle = sug ? 'color:var(--green);font-weight:700' : 'color:var(--muted)';
+
+    const info = raspDispInfo(r.kupac, r.sortiment);
+    const dispText = info
+      ? `<strong>${info.disp.broj||'—'}</strong> · ${info.disp.ugovor||'—'}<div style="font-size:11px;color:var(--muted)">Stanje: <strong style="color:${info.bal < 20 ? 'var(--red)' : 'var(--green)'}">${info.bal.toFixed(2)} m³</strong> · Disp. od ${raspDatumFmt(info.disp.datum)}</div>`
+      : (r.kupac && r.sortiment ? '<span style="color:var(--red);font-size:12px">⚠ Nema dispozicije sa stanjem!</span>' : '<span style="color:var(--muted)">—</span>');
+
     const sortOpts = FIELDS.map(f => `<option value="${f}"${r.sortiment===f?' selected':''}>${FL[f]}</option>`).join('');
     const kupciOpts = kupci.map(k => `<option value="${k}"${r.kupac===k?' selected':''}>${k}</option>`).join('');
     const inpStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px;width:100%';
     return `<tr>
       <td style="padding:6px 8px"><input type="text" list="rasp_odjel_list" value="${r.odjel||''}" style="${inpStyle}" onchange="saveRaspRow('${r.id}','odjel',this.value)"></td>
-      <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','sortiment',this.value);updateRaspSug('${r.id}',this.value)">
+      <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','sortiment',this.value)">
         <option value="">— Sortiment —</option>${sortOpts}
       </select></td>
       <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','kupac',this.value)">
         <option value="">— Kupac —</option>${kupciOpts}
       </select></td>
-      <td id="rasp-sug-${r.id}" style="padding:6px 10px;font-size:13px;${sugStyle}">${sugText}</td>
+      <td style="padding:6px 10px;font-size:13px;line-height:1.4">${dispText}</td>
+      <td style="padding:6px 10px;font-size:13px;line-height:1.4;${sugStyle}">${sugText}</td>
       <td style="padding:6px 4px;text-align:center"><button class="del-disp-btn" onclick="delRaspRow('${r.id}')">🗑</button></td>
     </tr>`;
   }).join('');
-}
-
-function updateRaspSug(id, sortimentField) {
-  const cell = document.getElementById('rasp-sug-' + id);
-  if (!cell) return;
-  const sug = autoSuggest(sortimentField);
-  cell.textContent = sug ? sug.kupac : '—';
-  cell.style.color = sug ? 'var(--green)' : 'var(--muted)';
-  cell.style.fontWeight = sug ? '700' : 'normal';
 }
 
 async function saveRaspRow(id, field, value) {
@@ -2955,6 +2974,7 @@ async function saveRaspRow(id, field, value) {
   if (!row) return;
   row[field] = value;
   await fbSetRasp(row);
+  renderRaspored();
 }
 
 async function addRasporedRow() {
@@ -2974,6 +2994,120 @@ async function addRasporedRow() {
 
 async function delRaspRow(id) {
   await fbDelRasp(id);
+}
+
+// Redovi za odabrani dan grupirani po odjelu, s podacima o dispoziciji
+function raspReportData() {
+  const datum = document.getElementById('rasp_datum')?.value || '';
+  const rows = rasporedRows
+    .filter(r => r.datum === datum)
+    .sort((a, b) => (a.odjel||'').localeCompare(b.odjel||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  const grouped = {};
+  rows.forEach(r => {
+    const key = r.odjel || '(bez odjela)';
+    (grouped[key] = grouped[key] || []).push(r);
+  });
+  return { datum, grouped, count: rows.length };
+}
+
+function printRaspored() {
+  const { datum, grouped, count } = raspReportData();
+  if (!count) { showToast('Nema unosa za odabrani dan!', 'error'); return; }
+  const dateFmt = raspDatumFmt(datum);
+
+  let bodyRows = '';
+  Object.keys(grouped).sort().forEach(odjel => {
+    const rows = grouped[odjel];
+    rows.forEach((r, i) => {
+      const info = raspDispInfo(r.kupac, r.sortiment);
+      bodyRows += `<tr>
+        ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${odjel}</td>` : ''}
+        <td style="text-align:center">${r.sortiment ? FL[r.sortiment] : ''}</td>
+        <td style="font-weight:600">${r.kupac||''}</td>
+        <td style="text-align:center">${info ? (info.disp.ugovor||'') : ''}</td>
+        <td style="text-align:center">${info ? (info.disp.broj||'') : ''}</td>
+        <td style="text-align:right;font-weight:600">${info ? info.bal.toFixed(2) + ' m³' : '—'}</td>
+        <td style="text-align:center">${info ? raspDatumFmt(info.disp.datum) : ''}</td>
+      </tr>`;
+    });
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Raspored kamiona – ${dateFmt}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Times New Roman',serif;font-size:10pt;color:#000;background:#fff;padding:12mm 10mm}
+      .doc-header{text-align:center;margin-bottom:8mm}
+      .doc-header h2{font-size:12pt;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+      .doc-header h3{font-size:11pt;font-weight:600;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:5mm}
+      th,td{border:1px solid #000;padding:4px 6px;vertical-align:middle;font-size:9pt}
+      th{background:#e8e8e8;text-align:center;font-weight:700}
+      @media print{@page{size:A4 landscape;margin:8mm}}
+    </style>
+  </head><body>
+    <div class="doc-header">
+      <h2>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h2>
+      <h3>RASPORED KAMIONA ZA ${dateFmt}. GODINE</h3>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:130px">ODJEL</th>
+          <th style="width:85px">SORTIMENT</th>
+          <th>KUPAC</th>
+          <th style="width:130px">UGOVOR</th>
+          <th style="width:80px">BROJ DISP.</th>
+          <th style="width:85px">STANJE DISP.</th>
+          <th style="width:80px">DATUM DISP.</th>
+        </tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+    <div style="margin-top:12mm;display:flex;justify-content:space-between;font-size:8pt">
+      <div>Sastavio: ___________________________</div>
+      <div>Datum i vrijeme: ${new Date().toLocaleString('bs-BA')}</div>
+    </div>
+    <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Dozvoli popup prozore za štampanje!'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+async function copyRaspored() {
+  const { datum, grouped, count } = raspReportData();
+  if (!count) { showToast('Nema unosa za odabrani dan!', 'error'); return; }
+
+  let txt = `🚚 RASPORED KAMIONA – ${raspDatumFmt(datum)}\n`;
+  Object.keys(grouped).sort().forEach(odjel => {
+    txt += `\n📍 ${odjel}\n`;
+    grouped[odjel].forEach((r, i) => {
+      const info = raspDispInfo(r.kupac, r.sortiment);
+      txt += `${i+1}. ${r.sortiment ? FL[r.sortiment] : '?'} – ${r.kupac||'?'}\n`;
+      if (info) {
+        txt += `   Disp: ${info.disp.broj||'—'} od ${raspDatumFmt(info.disp.datum)} · Ugovor: ${info.disp.ugovor||'—'} · Stanje: ${info.bal.toFixed(2)} m³\n`;
+      } else if (r.kupac && r.sortiment) {
+        txt += `   ⚠ Nema dispozicije sa stanjem!\n`;
+      }
+    });
+  });
+
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast('📋 Raspored kopiran – zalijepi u Viber/WhatsApp', 'success');
+  } catch(e) {
+    // fallback za starije browsere / http
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    showToast('📋 Raspored kopiran – zalijepi u Viber/WhatsApp', 'success');
+  }
 }
 
 let toastTimer;
