@@ -330,6 +330,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
     <button class="tab" onclick="switchTab('iscrpljene')">🗄 Iscrpljene dispozicije</button>
+    <button class="tab" onclick="switchTab('raspored')">🚚 Raspored</button>
   </div>
 
   <!-- PREGLED -->
@@ -615,6 +616,31 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     </div>
     <div id="iscrpljenList"></div>
   </div>
+
+  <!-- RASPORED -->
+  <div id="tab-raspored" class="panel">
+    <h2 style="margin-bottom:16px">🚚 Raspored kamiona</h2>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
+      <label style="font-weight:600;font-size:14px">Datum otpreme:</label>
+      <input type="date" id="rasp_datum" onchange="renderRaspored()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:14px">
+    </div>
+    <div style="overflow-x:auto">
+      <table class="disp-table" style="width:100%;min-width:580px">
+        <thead>
+          <tr>
+            <th style="width:160px">Odjel</th>
+            <th style="width:130px">Sortiment</th>
+            <th style="width:200px">Kupac (dogovoreni)</th>
+            <th style="width:180px">Auto-prijedlog</th>
+            <th style="width:40px"></th>
+          </tr>
+        </thead>
+        <tbody id="raspTbody"></tbody>
+      </table>
+    </div>
+    <datalist id="rasp_odjel_list"></datalist>
+    <button class="btn btn-primary" onclick="addRasporedRow()" style="margin-top:14px">+ Dodaj kamion</button>
+  </div>
 </main>
 
 <!-- CONFIRM MODAL -->
@@ -728,6 +754,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="iscrpljene" onclick="switchTab('iscrpljene')">
     <span class="mni">🗄</span><span class="mnl">Iscrplj.</span>
   </button>
+  <button class="mnav-btn" data-tab="raspored" onclick="switchTab('raspored')">
+    <span class="mni">🚚</span><span class="mnl">Raspored</span>
+  </button>
   <button class="mnav-btn" id="installBtn" onclick="pwaInstall()">
     <span class="mni">📲</span><span class="mnl">Instaliraj</span>
   </button>
@@ -769,11 +798,12 @@ let otpreme      = [];
 let pretprodaje  = [];
 let arhiva       = [];
 let kupacList    = [];
+let rasporedRows = [];
 let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
-const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene'];
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene','raspored'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -895,6 +925,12 @@ async function initFirebase() {
     }
   });
 
+  fs.onSnapshot(fs.collection(db, 'raspored'), snap => {
+    rasporedRows = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    rasporedRows.sort((a,b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+    if (document.querySelector('#tab-raspored.active')) renderRaspored();
+  });
+
   // ── meta: last sync time ──────────────────────────────
   try {
     const metaSnap = await fs.getDocs(fs.collection(db, 'meta'));
@@ -1009,6 +1045,14 @@ async function fbSetPretprodaja(p) {
 async function fbDelPretprodaja(id) {
   if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'pretprodaje', id));
+}
+async function fbSetRasp(r) {
+  if (!fs||!db) return;
+  await fs.setDoc(fs.doc(db, 'raspored', r.id), r);
+}
+async function fbDelRasp(id) {
+  if (!fs||!db) return;
+  await fs.deleteDoc(fs.doc(db, 'raspored', id));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2823,6 +2867,7 @@ function switchTab(t) {
   if(t==='hist-disp')   renderHistDisp();
   if(t==='historija')   renderHistorija();
   if(t==='iscrpljene')  renderIscrpljene();
+  if(t==='raspored')    renderRaspored();
 }
 
 function renderAll() {
@@ -2835,6 +2880,100 @@ function renderAll() {
   if (names[idx]==='hist-disp')   renderHistDisp();
   if (names[idx]==='historija')   renderHistorija();
   if (names[idx]==='iscrpljene')  renderIscrpljene();
+  if (names[idx]==='raspored')    renderRaspored();
+}
+
+// ═══════════════════════════════════════════════════════
+//  RASPORED
+// ═══════════════════════════════════════════════════════
+
+function autoSuggest(sortimentField) {
+  if (!sortimentField) return null;
+  const candidates = dispozicije
+    .filter(d => !isReplaced(d) && getBalance(d)[sortimentField] >= 20)
+    .sort((a, b) => (a.datum||'').localeCompare(b.datum||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  return candidates[0] || null;
+}
+
+function renderRaspored() {
+  const datInput = document.getElementById('rasp_datum');
+  if (datInput && !datInput.value) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1);
+    datInput.value = localDateStr(tomorrow);
+  }
+  const datum = datInput ? datInput.value : '';
+
+  const allOdjeli = [...new Set(rasporedRows.map(r => r.odjel).filter(Boolean))].sort();
+  const dlEl = document.getElementById('rasp_odjel_list');
+  if (dlEl) dlEl.innerHTML = allOdjeli.map(o => `<option value="${o}">`).join('');
+
+  const tbody = document.getElementById('raspTbody');
+  if (!tbody) return;
+
+  const kupci = kupacList.length ? kupacList : [...new Set(dispozicije.map(d => d.kupac))].sort();
+  const rows = rasporedRows.filter(r => r.datum === datum).sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Nema unosa za ovaj dan. Kliknite "+ Dodaj kamion".</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const sug = autoSuggest(r.sortiment);
+    const sugText = sug ? sug.kupac : '—';
+    const sugStyle = sug ? 'color:var(--green);font-weight:700' : 'color:var(--muted)';
+    const sortOpts = FIELDS.map(f => `<option value="${f}"${r.sortiment===f?' selected':''}>${FL[f]}</option>`).join('');
+    const kupciOpts = kupci.map(k => `<option value="${k}"${r.kupac===k?' selected':''}>${k}</option>`).join('');
+    const inpStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px;width:100%';
+    return `<tr>
+      <td style="padding:6px 8px"><input type="text" list="rasp_odjel_list" value="${r.odjel||''}" style="${inpStyle}" onchange="saveRaspRow('${r.id}','odjel',this.value)"></td>
+      <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','sortiment',this.value);updateRaspSug('${r.id}',this.value)">
+        <option value="">— Sortiment —</option>${sortOpts}
+      </select></td>
+      <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','kupac',this.value)">
+        <option value="">— Kupac —</option>${kupciOpts}
+      </select></td>
+      <td id="rasp-sug-${r.id}" style="padding:6px 10px;font-size:13px;${sugStyle}">${sugText}</td>
+      <td style="padding:6px 4px;text-align:center"><button class="del-disp-btn" onclick="delRaspRow('${r.id}')">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateRaspSug(id, sortimentField) {
+  const cell = document.getElementById('rasp-sug-' + id);
+  if (!cell) return;
+  const sug = autoSuggest(sortimentField);
+  cell.textContent = sug ? sug.kupac : '—';
+  cell.style.color = sug ? 'var(--green)' : 'var(--muted)';
+  cell.style.fontWeight = sug ? '700' : 'normal';
+}
+
+async function saveRaspRow(id, field, value) {
+  const row = rasporedRows.find(r => r.id === id);
+  if (!row) return;
+  row[field] = value;
+  await fbSetRasp(row);
+}
+
+async function addRasporedRow() {
+  const datInput = document.getElementById('rasp_datum');
+  const datum = datInput ? datInput.value : localDateStr();
+  if (!datum) { showToast('Odaberite datum', 'error'); return; }
+  const row = {
+    id: 'rasp_' + Date.now(),
+    datum,
+    odjel: '',
+    sortiment: '',
+    kupac: '',
+    createdAt: new Date().toISOString(),
+  };
+  await fbSetRasp(row);
+}
+
+async function delRaspRow(id) {
+  await fbDelRasp(id);
 }
 
 let toastTimer;
