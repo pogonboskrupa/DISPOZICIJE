@@ -451,6 +451,13 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
           <label>Ugovor</label>
           <input type="text" id="bpp_ugovor" placeholder="npr. 01-2793-1/25">
         </div>
+        <div class="form-group" style="grid-column:span 2">
+          <label>📥 PRIMKA link <span style="font-weight:400;color:var(--muted)">(samo za NOVI odjel — zalijepi link Google Sheet fajla)</span></label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="bpp_primka_link" placeholder="https://docs.google.com/spreadsheets/d/...">
+            <button type="button" class="btn btn-ghost" onclick="loadFromPrimka()" style="white-space:nowrap">📥 Učitaj iz PRIMKE</button>
+          </div>
+        </div>
       </div>
       <div class="section-label">🌲 ČETINARI</div>
       <div class="form-grid" id="bpp_cetinari_grid">
@@ -458,6 +465,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         <div class="form-group"><label>I klasa</label><input type="number" id="bpp_I" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>II klasa</label><input type="number" id="bpp_II" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>III klasa</label><input type="number" id="bpp_III" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Rudno/Šip</label><input type="number" id="bpp_RUDNO" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Cel.Duga</label><input type="number" id="bpp_CELD" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Cel.Cijepana</label><input type="number" id="bpp_CELC" step="0.01" placeholder="0.00"></div>
         <div class="form-group"><label>Škart</label><input type="number" id="bpp_SKART" step="0.01" placeholder="0.00"></div>
@@ -512,6 +520,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
             <option value="I klasa">
             <option value="II klasa">
             <option value="III klasa">
+            <option value="Rudno/Šip">
             <option value="Cel.Duga">
             <option value="Cel.Cij.">
             <option value="Škart">
@@ -811,6 +820,7 @@ let pretprodaje  = [];
 let arhiva       = [];
 let kupacList    = [];
 let rasporedRows = [];
+let primkaOdjeli = [];
 let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
@@ -943,6 +953,11 @@ async function initFirebase() {
     if (document.querySelector('#tab-raspored.active')) renderRaspored();
   });
 
+  fs.onSnapshot(fs.collection(db, 'primka_odjeli'), snap => {
+    primkaOdjeli = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    primkaOdjeli.sort((a,b) => (a.odjel||'').localeCompare(b.odjel||''));
+  });
+
   // ── meta: last sync time ──────────────────────────────
   try {
     const metaSnap = await fs.getDocs(fs.collection(db, 'meta'));
@@ -1065,6 +1080,14 @@ async function fbSetRasp(r) {
 async function fbDelRasp(id) {
   if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'raspored', id));
+}
+async function fbSetPrimkaOdjel(p) {
+  if (!fs||!db) return;
+  await fs.setDoc(fs.doc(db, 'primka_odjeli', p.id), p);
+}
+async function fbDelPrimkaOdjel(id) {
+  if (!fs||!db) return;
+  await fs.deleteDoc(fs.doc(db, 'primka_odjeli', id));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2437,8 +2460,11 @@ function renderPretprodaja() {
   const bppKupacDl = document.getElementById('bpp_kupac_list');
   if (bppKupacDl) bppKupacDl.innerHTML = allKupci.map(k => `<option value="${k}">`).join('');
 
-  // Popuni datalist za odjele
-  const ppOdjeli = [...new Set(pretprodaje.map(p => p.odjel).filter(Boolean))].sort();
+  // Popuni datalist za odjele (uključi i registrovane PRIMKA odjele)
+  const ppOdjeli = [...new Set([
+    ...pretprodaje.map(p => p.odjel),
+    ...primkaOdjeli.map(p => p.odjel),
+  ].filter(Boolean))].sort();
   ['pp_odjel_list','bpp_odjel_list'].forEach(dlId => {
     const dl = document.getElementById(dlId);
     if (dl) dl.innerHTML = ppOdjeli.map(o => `<option value="${o}">`).join('');
@@ -2579,6 +2605,7 @@ async function addBulkPretprodaja() {
     { id:'bpp_I',    klasa:'I klasa',       field:'tc'  },
     { id:'bpp_II',   klasa:'II klasa',      field:'tc'  },
     { id:'bpp_III',  klasa:'III klasa',     field:'tc'  },
+    { id:'bpp_RUDNO',klasa:'Rudno/Šip',     field:'rud' },
     { id:'bpp_CELD', klasa:'Cel.Duga',      field:'cd'  },
     { id:'bpp_CELC', klasa:'Cel.Cij.',      field:'cc'  },
     { id:'bpp_SKART',klasa:'Škart',         field:'rud' },
@@ -2616,11 +2643,76 @@ async function addBulkPretprodaja() {
 }
 
 function clearBulkPPForm() {
-  ['bpp_kupac','bpp_broj','bpp_odjel','bpp_ugovor',
-   'bpp_FL','bpp_I','bpp_II','bpp_III','bpp_CELD','bpp_CELC','bpp_SKART',
+  ['bpp_kupac','bpp_broj','bpp_odjel','bpp_ugovor','bpp_primka_link',
+   'bpp_FL','bpp_I','bpp_II','bpp_III','bpp_RUDNO','bpp_CELD','bpp_CELC','bpp_SKART',
    'bpp_FLL','bpp_IL','bpp_IIL','bpp_IIIL','bpp_OD','bpp_OC']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   document.getElementById('bpp_datum').value = localDateStr();
+}
+
+// Izvlači Google Sheet ID iz punog linka ili prihvata direktno zalijepljen ID
+function extractSheetId(input) {
+  const m = input.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : input.trim();
+}
+
+// Učitaj količine iz PRIMKE (D11:W11) za odabrani/novi odjel i popuni Brzi unos formu
+// Raspored kolona D:W (red 11), header u redu 10:
+//   D F/L | E I | F II | G III | H TT.RD.ŠIP | I ∑ | J dugo | K cijepano | L škart | M ∑
+//   N F/L | O I | P II | Q III | R ∑ | S dugo | T cijepano | U škart | V ∑ | W ∑(ukupno)
+// Prve 4 (D-G) i H idu u Trupci Č + Rudno; J-L (Ogrijev Č) i S-U (Ogrijev L) se sabiraju
+// jer aplikacija ne razdvaja ogrijev po vrsti drveta (isto kao postojeći OGR.DUGI/OGR.CIJEPANI/ŠKART).
+async function loadFromPrimka() {
+  const odjelName = (document.getElementById('bpp_odjel').value||'').trim();
+  if (!odjelName) { showToast('Upiši ili odaberi naziv odjela prvo!', 'error'); return; }
+
+  let entry = primkaOdjeli.find(p => (p.odjel||'').toLowerCase() === odjelName.toLowerCase());
+  let sheetId;
+  if (entry) {
+    sheetId = entry.sheetId;
+  } else {
+    const linkVal = (document.getElementById('bpp_primka_link').value||'').trim();
+    if (!linkVal) { showToast('Za novi odjel zalijepi link PRIMKA fajla!', 'error'); return; }
+    sheetId = extractSheetId(linkVal);
+    if (!sheetId) { showToast('Neispravan link!', 'error'); return; }
+  }
+
+  try {
+    const url  = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&range=D11:W11&headers=0`;
+    const res  = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}')+1));
+    const row  = (json.table.rows || [])[0];
+    const val  = i => {
+      const c = row?.c?.[i];
+      if (!c || c.v === null || c.v === undefined) return 0;
+      return typeof c.v === 'number' ? c.v : (parseFloat(c.v) || 0);
+    };
+    // indeksi 0-based od D: D0 E1 F2 G3 H4 I5(∑) J6 K7 L8 M9(∑) N10 O11 P12 Q13 R14(∑) S15 T16 U17 V18(∑) W19(∑)
+    document.getElementById('bpp_FL').value    = val(0)  || '';
+    document.getElementById('bpp_I').value     = val(1)  || '';
+    document.getElementById('bpp_II').value    = val(2)  || '';
+    document.getElementById('bpp_III').value   = val(3)  || '';
+    document.getElementById('bpp_RUDNO').value = val(4)  || '';
+    document.getElementById('bpp_OD').value    = r2(val(6)  + val(15)) || '';
+    document.getElementById('bpp_OC').value    = r2(val(7)  + val(16)) || '';
+    document.getElementById('bpp_SKART').value = r2(val(8)  + val(17)) || '';
+    document.getElementById('bpp_FLL').value   = val(10) || '';
+    document.getElementById('bpp_IL').value    = val(11) || '';
+    document.getElementById('bpp_IIL').value   = val(12) || '';
+    document.getElementById('bpp_IIIL').value  = val(13) || '';
+
+    if (!entry) {
+      const newEntry = { id: 'po_' + Date.now(), odjel: odjelName, sheetId, createdAt: new Date().toISOString() };
+      await fbSetPrimkaOdjel(newEntry);
+      showToast(`✅ Odjel "${odjelName}" registrovan i količine učitane iz PRIMKE! Provjeri i spremi.`, 'success');
+    } else {
+      showToast(`✅ Količine učitane iz PRIMKE za odjel "${odjelName}"! Provjeri i spremi.`, 'success');
+    }
+    document.getElementById('bpp_primka_link').value = '';
+  } catch (e) {
+    showToast('Greška pri čitanju PRIMKE — provjeri link i da je fajl javno dostupan ("Anyone with link can view").', 'error');
+  }
 }
 
 async function addPretprodajaEntry() {
