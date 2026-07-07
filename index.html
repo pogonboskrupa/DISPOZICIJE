@@ -416,6 +416,13 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
 
   <!-- PRETPRODAJA -->
   <div id="tab-pretprodaja" class="panel">
+    <div class="search-bar" style="align-items:center">
+      <label style="font-size:13px;color:var(--muted);white-space:nowrap">Obriši cijeli odjel:</label>
+      <select id="ppOdjelDelSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px;min-width:180px">
+        <option value="">— Odaberi odjel —</option>
+      </select>
+      <button class="btn btn-danger" onclick="deleteWholeOdjel()">🗑 Obriši odjel</button>
+    </div>
     <div id="pretprodajaList"></div>
 
     <!-- BRZI UNOS SVIH KLASA -->
@@ -2437,6 +2444,15 @@ function renderPretprodaja() {
     if (dl) dl.innerHTML = ppOdjeli.map(o => `<option value="${o}">`).join('');
   });
 
+  // Popuni select za brisanje cijelog odjela
+  const delSel = document.getElementById('ppOdjelDelSelect');
+  if (delSel) {
+    const prevVal = delSel.value;
+    delSel.innerHTML = '<option value="">— Odaberi odjel —</option>' +
+      ppOdjeli.map(o => `<option value="${o}">${o}</option>`).join('');
+    if (ppOdjeli.includes(prevVal)) delSel.value = prevVal;
+  }
+
   if (!pretprodaje.length) {
     list.innerHTML = `<div class="empty-state"><div class="big">🏷</div><p>Nema pretprodaja. Dodaj prvi klasa-red donjom formom.</p></div>`;
     return;
@@ -2679,6 +2695,27 @@ async function deletePretprodajaEntry(id) {
   if (!confirm('Obriši ovaj klasa-red?')) return;
   await fbDelPretprodaja(id);
   showToast('Red obrisan', 'success');
+}
+
+async function deleteWholeOdjel() {
+  const sel   = document.getElementById('ppOdjelDelSelect');
+  const odjel = sel ? sel.value : '';
+  if (!odjel) { showToast('Odaberite odjel koji želite obrisati!', 'error'); return; }
+
+  const entries = pretprodaje.filter(p => p.odjel === odjel);
+  if (!entries.length) { showToast('Nema unosa za odabrani odjel!', 'error'); return; }
+
+  const kupci = [...new Set(entries.map(p => p.kupac))];
+  const potvrda = confirm(
+    `Obriši cijeli odjel "${odjel}"?\n\n` +
+    `Ovo će trajno obrisati ${entries.length} klasa-red${entries.length===1?'':'a'} ` +
+    `za ${kupci.length} kupc${kupci.length===1?'a':'a'}: ${kupci.join(', ')}`
+  );
+  if (!potvrda) return;
+
+  for (const p of entries) await fbDelPretprodaja(p.id);
+  if (sel) sel.value = '';
+  showToast(`🗑 Odjel "${odjel}" obrisan (${entries.length} redova)`, 'success');
 }
 
 function clearPretprodajaForm() {
