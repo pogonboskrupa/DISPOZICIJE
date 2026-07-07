@@ -811,6 +811,18 @@ const PP_KLASA_MAP = [
   { sheetCol: 'OGR.CIJEPANI', klasa: 'Ogr.Cijepani',  field: 'oc'  },
 ];
 
+// Redoslijed klasa u prikazu pretprodaje — prati redoslijed kolona u PRIMKA fajlu (D:W)
+const PP_KLASA_ORDER = [
+  'F/L','I klasa','II klasa','III klasa','Rudno/Šip',
+  'Ogr.Dugi','Ogr.Cijepani','Škart',
+  'Cel.Duga','Cel.Cij.',
+  'F/L L','I klasa L','II klasa L','III klasa L',
+];
+function klasaSortKey(klasa) {
+  const idx = PP_KLASA_ORDER.indexOf(klasa);
+  return idx === -1 ? 999 : idx;
+}
+
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
@@ -2448,6 +2460,63 @@ function exportCSV() {
 // ═══════════════════════════════════════════════════════
 //  PRETPRODAJA
 // ═══════════════════════════════════════════════════════
+// Grupiraj pretprodaju po (kupac|odjel) — zajednička logika za render i za edit ugovora/broja
+function getPPGroups() {
+  const grouped = {};
+  pretprodaje.forEach(p => {
+    const key = `${p.kupac}|${p.odjel||''}`;
+    (grouped[key] = grouped[key]||[]).push(p);
+  });
+  return grouped;
+}
+
+function ppGroupHeaderHtml(gi, r0, sviBrojevi, datFmt) {
+  return `
+    <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
+    <span style="font-size:13px;color:var(--muted)">Disp: <strong style="color:var(--text)">${sviBrojevi.length ? sviBrojevi.join(' · ') : '—'}</strong></span>
+    <span style="font-size:13px;color:var(--muted)">${datFmt}</span>
+    ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
+    <span style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${r0.ugovor||'—'}</strong></span>
+    <button class="edit-disp-btn" onclick="editGroupInfo(${gi})" title="Uredi broj dispozicije i ugovor">✏️ Uredi</button>
+  `;
+}
+
+function editGroupInfo(gi) {
+  const grouped = getPPGroups();
+  const key  = Object.keys(grouped)[gi];
+  const rows = grouped[key];
+  const el   = document.getElementById(`pp-group-header-${gi}`);
+  if (!rows || !el) return;
+  const r0 = rows[0];
+  el.innerHTML = `
+    <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
+    <span style="font-size:13px;color:var(--muted)">Disp:
+      <input id="ppg_broj_${gi}" value="${r0.broj||''}" placeholder="npr. 01/26-L"
+        style="width:110px;font-size:12px;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--accent);border-radius:4px">
+    </span>
+    ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
+    <span style="font-size:12px;color:var(--muted)">Ugovor:
+      <input id="ppg_ugovor_${gi}" value="${r0.ugovor||''}" placeholder="npr. 01-2793-1/25"
+        style="width:150px;font-size:12px;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--accent);border-radius:4px">
+    </span>
+    <button class="btn btn-success" style="padding:4px 10px;font-size:12px" onclick="saveGroupInfo(${gi})">💾 Spremi</button>
+    <button class="btn btn-ghost"   style="padding:4px 10px;font-size:12px" onclick="renderPretprodaja()">✕</button>
+  `;
+}
+
+async function saveGroupInfo(gi) {
+  const grouped = getPPGroups();
+  const key  = Object.keys(grouped)[gi];
+  const rows = grouped[key];
+  if (!rows) return;
+  const broj   = (document.getElementById(`ppg_broj_${gi}`)?.value||'').trim();
+  const ugovor = (document.getElementById(`ppg_ugovor_${gi}`)?.value||'').trim();
+  for (const p of rows) {
+    await fbSetPretprodaja({ ...p, broj, ugovor });
+  }
+  showToast('Broj dispozicije i ugovor ažurirani za cijeli odjel!', 'success');
+}
+
 function renderPretprodaja() {
   const list = document.getElementById('pretprodajaList');
   if (!list) return;
@@ -2484,12 +2553,8 @@ function renderPretprodaja() {
     return;
   }
 
-  // Grupiraj po (kupac|broj|odjel)
-  const grouped = {};
-  pretprodaje.forEach(p => {
-    const key = `${p.kupac}|${p.odjel||''}`;
-    (grouped[key] = grouped[key]||[]).push(p);
-  });
+  // Grupiraj po (kupac|odjel)
+  const grouped = getPPGroups();
 
   let html = '';
   Object.entries(grouped).forEach(([key, rows], gi) => {
@@ -2509,12 +2574,8 @@ function renderPretprodaja() {
     html += `
     <div style="margin-bottom:24px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
       <!-- Header licitacije -->
-      <div style="background:var(--surface2);padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid var(--accent)">
-        <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
-        <span style="font-size:13px;color:var(--muted)">Disp: <strong style="color:var(--text)">${sviBrojevi.length ? sviBrojevi.join(' · ') : '—'}</strong></span>
-        <span style="font-size:13px;color:var(--muted)">${datFmt}</span>
-        ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
-        ${r0.ugovor ? `<span style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${r0.ugovor}</strong></span>` : ''}
+      <div id="pp-group-header-${gi}" style="background:var(--surface2);padding:12px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:2px solid var(--accent)">
+        ${ppGroupHeaderHtml(gi, r0, sviBrojevi, datFmt)}
       </div>
       <!-- Tabela po klasama -->
       <div class="table-wrap" style="border:none;border-radius:0">
@@ -2548,7 +2609,9 @@ function renderPretprodaja() {
       if (!klasaMap[k]) klasaMap[k] = [];
       klasaMap[k].push(p);
     });
-    Object.entries(klasaMap).forEach(([klasa, entries]) => {
+    Object.entries(klasaMap)
+      .sort((a, b) => klasaSortKey(a[0]) - klasaSortKey(b[0]))
+      .forEach(([klasa, entries]) => {
       const kOrig = {}; const kBal = {};
       FIELDS.forEach(f => { kOrig[f] = 0; kBal[f] = 0; });
       entries.forEach(p => {
