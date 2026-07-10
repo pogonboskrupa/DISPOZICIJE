@@ -1,5 +1,19 @@
 # Provjera povezanosti sa otpremom — izvještaj o bugovima
 
+> ## ✅ STATUS: SVI BUGOVI ISPRAVLJENI — 10.07.2026.
+> - **#1** batchSpent → `syncSpent` na nivou cijelog sync runa; popravka potvrđena simulacijom ASIKS scenarija (dva reda, isti kupac, isti sync)
+> - **#2** auto-brisanje sada zahtijeva da je SVAKO polje ≤ 0 (`FIELDS.every`), ne zbir
+> - **#3** PP auto-detect blok premješten PRIJE `totalQty` provjere
+> - **#4** deleteOtp provjerava postoji li dispozicija i upozorava ako ne postoji
+> - **#5** novi `kupacMatch()` helper — podstring poklapanje samo za imena ≥5 znakova; primijenjen na sva 4 mjesta (ručni FIFO, sync FIFO, PP routing, PP auto-detect)
+> - **#6** ručni FIFO dobio isti datumski filter kao sync (+ fallback na odabranu dispoziciju)
+> - **#7** ručna otprema više ne prima budući datum
+> - **#8** potvrda ručne otpreme sada jasno kaže da se količine FIFO raspoređuju
+> - **#9** getBalanceAtDate broji samo otpreme postojećih dispozicija
+> - **#10** identični dupli redovi dobiju `_r2`, `_r3`... ključ umjesto tihog preskakanja (`uniqueKey()`)
+> - **#11** PP marker (odjel+klasa na otpremi) čuva badge/filter i nakon brisanja odjela
+> - **#12** mrtvi kod `isRecentlyExhausted()` uklonjen
+
 **Datum provjere:** 10.07.2026.
 **Provjereno:** ručna otprema (submitOtprema → confirmOtprema), sync iz Google Sheets-a (syncSheet → doSync), FIFO raspodjela, getBalance/balStatus, brisanje/storniranje otprema, historija otprema, auto-brisanje i arhiviranje dispozicija, pretprodaja routing, Raspored (autoSuggest/raspDispInfo).
 

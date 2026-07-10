@@ -794,6 +794,18 @@ const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
 const r2 = x => Math.round(x * 100) / 100;
 
+// Poklapanje imena kupaca: tačno poklapanje uvijek; podstring poklapanje
+// samo kad su OBA imena ≥5 znakova (sprječava da se npr. 'BOR' poklopi
+// sa svakim imenom koje sadrži 'BOR')
+function kupacMatch(a, b) {
+  const x = (a||'').toUpperCase().trim();
+  const y = (b||'').toUpperCase().trim();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (Math.min(x.length, y.length) < 5) return false;
+  return x.includes(y) || y.includes(x);
+}
+
 // Mapiranje kolona INDEKS_OTPREMA → pretprodaja klasa → polje
 const PP_KLASA_MAP = [
   { sheetCol: 'F/L',          klasa: 'F/L',          field: 'tc'  },
@@ -1127,13 +1139,6 @@ function balStatus(disp) {
   if (rem / total <= 0.30) return 'low';
   if (rem < 20) return 'low';
   return 'ok';
-}
-
-// Provjeri je li dispozicija iscrpljena unutar zadnjih 24h
-function isRecentlyExhausted(disp) {
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = localDateStr(yesterday);
-  return otpreme.some(o => o.disp_id === disp.id && (o.datum||'') >= yesterdayStr);
 }
 
 // Provjeri je li dispozicija "iscrpljena i zamijenjena":
@@ -1553,6 +1558,8 @@ function submitOtprema() {
   const kupac  = document.getElementById('o_kupac').value;
   const dispId = document.getElementById('o_disp').value;
   if (!kupac||!dispId) { showToast('Odaberite kupca i dispoziciju!','error'); return; }
+  const oDatum = document.getElementById('o_datum').value;
+  if (oDatum > localDateStr()) { showToast('Datum ne može biti u budućnosti!','error'); return; }
   const vals = {};
   let total = 0;
   FIELDS.forEach(f => { vals[f] = parseFloat(document.getElementById('o_'+f).value)||0; total += vals[f]; });
@@ -1560,14 +1567,16 @@ function submitOtprema() {
   const disp    = findAnyDisp(dispId);
   const bal     = getBalance(disp);
   const overages = FIELDS.filter(f=>vals[f]>bal[f]);
+  const isPPsel  = pretprodaje.some(p => p.id === dispId);
   document.getElementById('confirmText').innerHTML =
     `<strong>Kupac:</strong> ${kupac}<br>
      <strong>Dispozicija:</strong> ${disp.broj}<br>
      <strong>Otpremnica:</strong> ${document.getElementById('o_broj').value||'—'}<br>
-     <strong>Datum:</strong> ${document.getElementById('o_datum').value}<br><br>
+     <strong>Datum:</strong> ${oDatum}<br><br>
      <strong>Količine:</strong><br>
      ${FIELDS.filter(f=>vals[f]>0).map(f=>`${FL[f]}: <strong>${vals[f]} m³</strong>`).join('<br>')}
-     ${overages.length ? `<br><br><span style="color:var(--red)">⚠️ Prekoračenje: ${overages.map(f=>FL[f]).join(', ')}</span>` : ''}`;
+     ${overages.length ? `<br><br><span style="color:var(--red)">⚠️ Prekoračenje: ${overages.map(f=>FL[f]).join(', ')}</span>` : ''}
+     ${!isPPsel ? `<br><br><span style="color:var(--muted);font-size:12px">ℹ️ Količine se automatski raspoređuju po dispozicijama kupca od najstarije (FIFO).</span>` : ''}`;
   pendingOtp = {
     kupac, disp_id:dispId, ...vals,
     datum: document.getElementById('o_datum').value,
@@ -1585,10 +1594,16 @@ async function confirmOtprema() {
     await fbSetOtp(pendingOtp);
   } else {
     // FIFO: rasporedi po dispozicijama od najstarije, bez minusa
-    const ku = pendingOtp.kupac.toUpperCase().trim();
+    // (isti datumski filter kao u sync-u: dispozicija mora postojati na dan otpreme)
     const kandidati = dispozicije
-      .filter(d => { const dk = d.kupac.toUpperCase().trim(); return dk === ku || dk.includes(ku) || ku.includes(dk); })
+      .filter(d => kupacMatch(d.kupac, pendingOtp.kupac))
+      .filter(d => !d.datum || d.datum <= pendingOtp.datum)
       .sort((a,b) => (a.datum||'').localeCompare(b.datum||''));
+    // fallback: ako filter ne nađe ništa, koristi dispoziciju koju je korisnik odabrao
+    if (!kandidati.length) {
+      const sel = dispozicije.find(d => d.id === pendingOtp.disp_id);
+      if (sel) kandidati.push(sel);
+    }
     const batchSpent = {};
     const splits = {};
     const lastDisp = kandidati[kandidati.length - 1];
@@ -1625,12 +1640,14 @@ async function confirmOtprema() {
       await fbSetOtp({ id: 'man_' + (ts + i++), kupac: pendingOtp.kupac, disp_id, datum: pendingOtp.datum, broj: pendingOtp.broj, source: 'manual', ...qtys });
     }
 
-    // Auto-brisanje exhausted dispozicija (saldo ≤ 0 na svim poljima)
+    // Auto-brisanje exhausted dispozicija — SVAKO polje mora biti ≤ 0.
+    // (zbir preko polja bi dozvolio da minus u jednom sortimentu
+    // 'pojede' plus u drugom i obriše dispoziciju koja još ima robe)
     for (const [disp_id, qtys] of Object.entries(splits)) {
       const preBal = preBalances[disp_id];
       if (!preBal) continue;
-      const remainingTotal = FIELDS.reduce((s, f) => s + r2((preBal[f] || 0) - (qtys[f] || 0)), 0);
-      if (remainingTotal <= 0) await fbDelDisp(disp_id);
+      const allSpent = FIELDS.every(f => r2((preBal[f] || 0) - (qtys[f] || 0)) <= 0);
+      if (allSpent) await fbDelDisp(disp_id);
     }
   }
   pendingOtp = null;
@@ -1897,7 +1914,8 @@ function renderHistorija() {
   const list       = document.getElementById('historijaList');
 
   // Helper: je li otprema iz pretprodaje?
-  const isPP = o => pretprodaje.some(p => p.id === o.disp_id);
+  // (odjel+klasa marker pokriva i otpreme čiji je PP zapis kasnije obrisan)
+  const isPP = o => pretprodaje.some(p => p.id === o.disp_id) || !!(o.odjel && o.klasa);
 
   let filtered = [...otpreme].filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
@@ -1927,7 +1945,10 @@ function renderHistorija() {
     const totalOrig = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
     const totalSpent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
     dispozicije.forEach(d => FIELDS.forEach(f => totalOrig[f] += (d[f]||0)));
-    otpreme.filter(o => o.datum && o.datum < dateStr)
+    // Broji samo otpreme vezane za POSTOJEĆE dispozicije — inače otpreme
+    // obrisanih/arhiviranih dispozicija umanjuju stanje čiji original više nije u zbiru
+    const dispIds = new Set(dispozicije.map(d => d.id));
+    otpreme.filter(o => o.datum && o.datum < dateStr && dispIds.has(o.disp_id))
            .forEach(o => FIELDS.forEach(f => totalSpent[f] += (o[f]||0)));
     const bal = {};
     FIELDS.forEach(f => bal[f] = totalOrig[f] - totalSpent[f]);
@@ -1977,7 +1998,7 @@ function renderHistorija() {
       dayOtpreme.forEach(o => {
         const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
         const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
-        const isPretp  = !!ppEntry;
+        const isPretp  = !!ppEntry || !!(o.odjel && o.klasa);
         const vals     = FIELDS.filter(f=>o[f]>0)
           .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${r2(o[f]).toFixed(2)} m³</div></div>`).join('');
         const srcBadge = o.source==='sheet'
@@ -2020,7 +2041,12 @@ function renderHistorija() {
 }
 
 async function deleteOtp(id) {
-  if (!confirm('Storni ovu otpremu? Dispozicija će biti vraćena.')) return;
+  const o = otpreme.find(x => x.id === id);
+  const linkedExists = o && (dispozicije.some(d => d.id === o.disp_id) || pretprodaje.some(p => p.id === o.disp_id));
+  const msg = linkedExists
+    ? 'Storni ovu otpremu? Dispozicija će biti vraćena.'
+    : 'Storni ovu otpremu?\n\n⚠️ UPOZORENJE: povezana dispozicija više ne postoji (obrisana ili arhivirana) — količina se neće vratiti ni na jednu dispoziciju.';
+  if (!confirm(msg)) return;
   await fbDelOtp(id);
   showToast('Otprema stornirana','success');
 }
@@ -2030,7 +2056,8 @@ async function deleteAllOtp() {
   const onlySheet  = document.getElementById('hOnlySheet')?.checked;
   const onlyManual = document.getElementById('hOnlyManual')?.checked;
   const onlyPP     = document.getElementById('hOnlyPP')?.checked;
-  const isPP = o => pretprodaje.some(p => p.id === o.disp_id);
+  // PP marker: aktivan PP zapis ILI otprema koja nosi odjel+klasu (PP routing ih uvijek postavlja)
+  const isPP = o => pretprodaje.some(p => p.id === o.disp_id) || !!(o.odjel && o.klasa);
   const filtered = otpreme.filter(o => {
     if (onlySheet  && o.source!=='sheet') return false;
     if (onlyManual && o.source==='sheet') return false;
@@ -2229,6 +2256,19 @@ async function doSync() {
     let newCount  = 0;
     let batchDocs = [];
 
+    // BUG FIX: potrošnja se prati na nivou CIJELOG sync runa, ne po redu —
+    // inače više redova istog kupca vidi isto početno stanje (lokalne otpreme
+    // se ne ažuriraju dok petlja traje) i svaki uzme istu preostalu količinu.
+    const syncSpent = {};
+
+    // Brojač ponavljanja ključeva u ovom runu: dva stvarno identična reda
+    // (isti datum/kupac/količine) dobiju _r2, _r3... umjesto tihog preskakanja.
+    const runKeyCount = {};
+    const uniqueKey = base => {
+      runKeyCount[base] = (runKeyCount[base] || 0) + 1;
+      return runKeyCount[base] === 1 ? base : `${base}_r${runKeyCount[base]}`;
+    };
+
     for (const row of rows) {
       const kupacRaw = cs(row, 'KUPAC');
       if (!kupacRaw) continue;
@@ -2246,17 +2286,15 @@ async function doSync() {
       const activeOdjel = ppOdjelSet.has(rowOdjel) ? rowOdjel : '';
 
       if (activeOdjel) {
-        const ku = kupacRaw.toUpperCase().trim();
         for (const pm of PP_KLASA_MAP) {
           const qty = cv(row, pm.sheetCol);
           if (qty <= 0) continue;
-          const ppEntry = pretprodaje.find(p => {
-            const pk = p.kupac.toUpperCase().trim();
-            return (pk === ku || pk.includes(ku) || ku.includes(pk))
+          const ppEntry = pretprodaje.find(p =>
+            kupacMatch(p.kupac, kupacRaw)
               && p.odjel === activeOdjel
-              && p.klasa === pm.klasa;
-          });
-          const rowKey = `pp_${datum}_${kupacRaw}_${activeOdjel}_${pm.klasa}_${qty}`;
+              && p.klasa === pm.klasa
+          );
+          const rowKey = uniqueKey(`pp_${datum}_${kupacRaw}_${activeOdjel}_${pm.klasa}_${qty}`);
           if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
           existingKeys.add(rowKey);
           existingBaseKeys.add(rowKey);
@@ -2292,20 +2330,50 @@ async function doSync() {
         od:  cv(row, 'OGR.DUGI'),
       };
 
+      // ── AUTO-PREPOZNAJ PP KOLONE ─────────────────────────────────────────
+      // Kolone isključivo pretprodajne (nisu u regularnom mappingu):
+      // F/L, I, II, III, ŠKART, I L, II L, III L
+      // BUG FIX: mora doći PRIJE totalQty provjere — red koji ima količine
+      // SAMO u PP kolonama bi inače bio preskočen (continue) i tiho izgubljen.
+      const REGULAR_COLS = new Set(['TRUPCI Č','RD','CEL.DUGA','CEL.CIJEPANA','TRUPCI L','F/L L','OGR.CIJEPANI','OGR.DUGI']);
+      for (const pm of PP_KLASA_MAP) {
+        if (REGULAR_COLS.has(pm.sheetCol)) continue;
+        const qty = cv(row, pm.sheetCol);
+        if (qty <= 0) continue;
+        const ppEntry = pretprodaje.find(p => kupacMatch(p.kupac, kupacRaw) && p.klasa === pm.klasa);
+        if (!ppEntry) continue; // preskoči ako nema matching PP unosa — ne kreira unmatched za regularne kupce
+        const ppKey = uniqueKey(`pp_auto_${datum}_${kupacRaw}_${pm.sheetCol}_${qty}`);
+        if (existingKeys.has(ppKey) || existingBaseKeys.has(ppKey)) continue;
+        existingKeys.add(ppKey);
+        existingBaseKeys.add(ppKey);
+        const otp = {
+          id: 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+          sheet_key: ppKey,
+          source: 'sheet',
+          kupac: kupacRaw,
+          disp_id: ppEntry.id,
+          unmatched: false,
+          datum,
+          broj: cs(row, 'OTPREMAČ') || '',
+          odjel: ppEntry?.odjel || '',
+          klasa: pm.klasa,
+          tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
+        };
+        otp[pm.field] = qty;
+        batchDocs.push({ id: otp.id, data: otp });
+        newCount++;
+      }
+
       const totalQty = FIELDS.reduce((s,f) => s + qtyRow[f], 0);
       if (totalQty === 0) continue;
 
-      const rowKey = `sheet_${datum}_${kupacRaw}_${FIELDS.map(f=>qtyRow[f]).join('_')}`;
+      const rowKey = uniqueKey(`sheet_${datum}_${kupacRaw}_${FIELDS.map(f=>qtyRow[f]).join('_')}`);
       if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
       existingKeys.add(rowKey);
       existingBaseKeys.add(rowKey);
 
-      const ku = kupacRaw.toUpperCase().trim();
       const kandidati = dispozicije
-        .filter(d => {
-          const dk = d.kupac.toUpperCase().trim();
-          return dk === ku || dk.includes(ku) || ku.includes(dk);
-        })
+        .filter(d => kupacMatch(d.kupac, kupacRaw))
         .filter(d => !d.datum || d.datum <= datum)
         .sort((a,b) => (a.datum||'').localeCompare(b.datum||''));
 
@@ -2320,7 +2388,6 @@ async function doSync() {
         continue;
       }
 
-      const batchSpent  = {};
       const splits      = {};
       const lastKandid  = kandidati[kandidati.length - 1];
 
@@ -2330,20 +2397,22 @@ async function doSync() {
         for (const disp of kandidati) {
           if (remaining <= 0) break;
           const bal          = getBalance(disp);
-          const alreadySpent = (batchSpent[disp.id] || {})[field] || 0;
+          const alreadySpent = (syncSpent[disp.id] || {})[field] || 0;
           const available    = Math.max(0, bal[field] - alreadySpent);
           if (available <= 0) continue;
           const take = r2(Math.min(remaining, available));
-          if (!splits[disp.id])     splits[disp.id]     = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-          if (!batchSpent[disp.id]) batchSpent[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-          splits[disp.id][field]     = r2(splits[disp.id][field]     + take);
-          batchSpent[disp.id][field] = r2(batchSpent[disp.id][field] + take);
+          if (!splits[disp.id])    splits[disp.id]    = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          if (!syncSpent[disp.id]) syncSpent[disp.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          splits[disp.id][field]    = r2(splits[disp.id][field]    + take);
+          syncSpent[disp.id][field] = r2(syncSpent[disp.id][field] + take);
           remaining = r2(remaining - take);
         }
         // nema pokrića – dozvoli minus na zadnjoj dispoziciji
         if (remaining > 0) {
-          if (!splits[lastKandid.id]) splits[lastKandid.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-          splits[lastKandid.id][field] = r2(splits[lastKandid.id][field] + remaining);
+          if (!splits[lastKandid.id])    splits[lastKandid.id]    = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          if (!syncSpent[lastKandid.id]) syncSpent[lastKandid.id] = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+          splits[lastKandid.id][field]    = r2(splits[lastKandid.id][field]    + remaining);
+          syncSpent[lastKandid.id][field] = r2(syncSpent[lastKandid.id][field] + remaining);
         }
       }
 
@@ -2362,41 +2431,6 @@ async function doSync() {
         newCount++;
       }
 
-      // ── AUTO-PREPOZNAJ PP KOLONE ─────────────────────────────────────────
-      // Kolone isključivo pretprodajne (nisu u regularnom mappingu):
-      // F/L, I, II, III, ŠKART, I L, II L, III L
-      const REGULAR_COLS = new Set(['TRUPCI Č','RD','CEL.DUGA','CEL.CIJEPANA','TRUPCI L','F/L L','OGR.CIJEPANI','OGR.DUGI']);
-      const kuPP = kupacRaw.toUpperCase().trim();
-      for (const pm of PP_KLASA_MAP) {
-        if (REGULAR_COLS.has(pm.sheetCol)) continue;
-        const qty = cv(row, pm.sheetCol);
-        if (qty <= 0) continue;
-        const ppEntry = pretprodaje.find(p => {
-          const pk = p.kupac.toUpperCase().trim();
-          return (pk === kuPP || pk.includes(kuPP) || kuPP.includes(pk)) && p.klasa === pm.klasa;
-        });
-        if (!ppEntry) continue; // preskoči ako nema matching PP unosa — ne kreira unmatched za regularne kupce
-        const ppKey = `pp_auto_${datum}_${kupacRaw}_${pm.sheetCol}_${qty}`;
-        if (existingKeys.has(ppKey) || existingBaseKeys.has(ppKey)) continue;
-        existingKeys.add(ppKey);
-        existingBaseKeys.add(ppKey);
-        const otp = {
-          id: 'sh_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
-          sheet_key: ppKey,
-          source: 'sheet',
-          kupac: kupacRaw,
-          disp_id: ppEntry ? ppEntry.id : null,
-          unmatched: !ppEntry,
-          datum,
-          broj: cs(row, 'OTPREMAČ') || '',
-          odjel: ppEntry?.odjel || '',
-          klasa: pm.klasa,
-          tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
-        };
-        otp[pm.field] = qty;
-        batchDocs.push({ id: otp.id, data: otp });
-        newCount++;
-      }
     }
 
     for (let i = 0; i < batchDocs.length; i += 490) {
