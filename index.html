@@ -994,7 +994,9 @@ async function transferDebtAndCleanup(extraDisp) {
     ? [...dispozicije.filter(x => x.id !== extraDisp.id), extraDisp]
     : dispozicije;
 
-  const exhausted = pool.filter(d => isReplaced(d, pool));
+  // Iscrpljene+zamijenjene (u minusu, pokrivene zamjenskom) I nulirane
+  // (tačno na nuli, nema duga za prenijeti) — obje se ovdje čiste.
+  const exhausted = pool.filter(d => isReplaced(d, pool) || isZeroedOut(d));
   if (!exhausted.length) return 0;
 
   // Prati prijenose izvršene UNUTAR ovog poziva — realtime listener još nije
@@ -1038,7 +1040,7 @@ async function transferDebtAndCleanup(extraDisp) {
 
 async function autoCleanupExhaustedDisps() {
   const n = await transferDebtAndCleanup();
-  if (n > 0) showToast(`🔁 Preneseno dugovanje i obrisano ${n} iscrpljenih dispozicija`, 'success');
+  if (n > 0) showToast(`🗄️ Obrisano ${n} iscrpljenih/nuliranih dispozicija (dug prenesen gdje je bilo potrebno)`, 'success');
 
   // Očisti arhivske zapise starije od 10 dana (tab prikazuje samo zadnjih 10 dana)
   const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000;
@@ -1180,6 +1182,17 @@ function isReplaced(disp, pool = dispozicije) {
       getBalance(other)[f] > dug  // nova mora pokriti dug
     );
   });
+}
+
+// Provjeri je li dispozicija "nulirana": sravnjena TAČNO na nulu na svim
+// pokrivenim poljima (nema duga, nema šta prenositi) — za razliku od
+// isReplaced() koja traži pokriće za MINUS. Nulirana se briše odmah,
+// bez traženja zamjenske dispozicije.
+function isZeroedOut(disp) {
+  const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
+  if (coveredFields.length === 0) return false;
+  const bal = getBalance(disp);
+  return coveredFields.every(f => bal[f] === 0);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1432,9 +1445,9 @@ async function addDispozicija() {
   };
   await fbSetDisp(d);
   clearNovaForm();
-  const transferred = await transferDebtAndCleanup(d);
+  const cleaned = await transferDebtAndCleanup(d);
   showToast(`✅ Dispozicija "${broj}" za "${kupac}" dodana!` +
-    (transferred ? ` 🔁 Preneseno dugovanje sa ${transferred} iscrpljene dispozicije.` : ''), 'success');
+    (cleaned ? ` 🗄️ Očišćeno ${cleaned} iscrpljenih/nuliranih dispozicija.` : ''), 'success');
   switchTab('pregled');
 }
 
@@ -1514,9 +1527,9 @@ async function saveDisp() {
   };
   await fbSetDisp(d);
   closeEditModal();
-  const transferred = await transferDebtAndCleanup(d);
+  const cleaned = await transferDebtAndCleanup(d);
   showToast(`✅ Dispozicija "${broj}" ažurirana!` +
-    (transferred ? ` 🔁 Preneseno dugovanje sa ${transferred} iscrpljene dispozicije.` : ''), 'success');
+    (cleaned ? ` 🗄️ Očišćeno ${cleaned} iscrpljenih/nuliranih dispozicija.` : ''), 'success');
 }
 
 function closeEditModal() {
@@ -1681,14 +1694,22 @@ async function confirmOtprema() {
       await fbSetOtp({ id: 'man_' + (ts + i++), kupac: pendingOtp.kupac, disp_id, datum: pendingOtp.datum, broj: pendingOtp.broj, source: 'manual', ...qtys });
     }
 
-    // Auto-brisanje exhausted dispozicija — SVAKO polje mora biti ≤ 0.
-    // (zbir preko polja bi dozvolio da minus u jednom sortimentu
-    // 'pojede' plus u drugom i obriše dispoziciju koja još ima robe)
+    // Odmah obriši dispozicije nulirane TAČNO na nulu ovom otpremom (nema duga,
+    // ništa za prenijeti — arhiviraj pa obriši). Dispozicije koje bi ovom otpremom
+    // otišle u MINUS se ovdje NE brišu — ostaju vidljive u pregledu dok
+    // transferDebtAndCleanup() (kod sljedeće dispozicije/edit-a ili dnevnog
+    // cleanup-a) ne nađe zamjensku dispoziciju i ispravno prenese dug na nju.
     for (const [disp_id, qtys] of Object.entries(splits)) {
       const preBal = preBalances[disp_id];
-      if (!preBal) continue;
-      const allSpent = FIELDS.every(f => r2((preBal[f] || 0) - (qtys[f] || 0)) <= 0);
-      if (allSpent) await fbDelDisp(disp_id);
+      const disp   = kandidati.find(d => d.id === disp_id);
+      if (!preBal || !disp) continue;
+      const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
+      const zeroed = coveredFields.length > 0 &&
+        coveredFields.every(f => r2((preBal[f] || 0) - (qtys[f] || 0)) === 0);
+      if (zeroed) {
+        await fbArchiveDisp(disp);
+        await fbDelDisp(disp_id);
+      }
     }
   }
   pendingOtp = null;
