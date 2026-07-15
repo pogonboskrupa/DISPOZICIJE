@@ -1205,8 +1205,12 @@ function renderPregled() {
         !(d.broj||'').toLowerCase().includes(search)) return;
     const st = balStatus(d);
     if (st === 'empty') return; // bez definiranih kolicina — ignoriraj
-    if (isReplaced(d)) return;  // iscrpljena I zamijenjena — ide u zasebni tab
-    // 'over' (minus bez zamjene) i sve ostalo ostaje u pregledu
+    // Sakrij SAMO ako je iscrpljena I postoji druga dispozicija istog kupca
+    // za isti sortiment koja pokriva dug (briše se u dnevnom cleanup-u).
+    // Ako je ovo JEDINA dispozicija za taj sortiment, isReplaced() vraća
+    // false čak i kad je u minusu — ostaje vidljiva ovdje kao 'over'.
+    if (isReplaced(d)) return;
+    // 'over' (minus bez zamjene, ili samo jedna dispozicija za sortiment) ostaje u pregledu
     (grouped[d.kupac] = grouped[d.kupac]||[]).push(d);
   });
 
