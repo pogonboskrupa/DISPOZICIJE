@@ -331,6 +331,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <button class="tab" onclick="switchTab('otprema')">🚛 Ručna otprema</button>
     <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
+    <button class="tab" onclick="switchTab('potrosene')">🗄 Potrošene dispozicije</button>
     <button class="tab" onclick="switchTab('raspored')">🚚 Raspored</button>
   </div>
 
@@ -626,6 +627,14 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <div id="historijaList"></div>
   </div>
 
+  <!-- POTROŠENE DISPOZICIJE -->
+  <div id="tab-potrosene" class="panel">
+    <div class="search-bar">
+      <input type="text" id="potrSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderPotrosene()">
+    </div>
+    <div id="potroseneList"></div>
+  </div>
+
   <!-- RASPORED -->
   <div id="tab-raspored" class="panel">
     <h2 style="margin-bottom:16px">🚚 Raspored kamiona</h2>
@@ -781,6 +790,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="historija" onclick="switchTab('historija')">
     <span class="mni">📜</span><span class="mnl">Otpreme</span>
   </button>
+  <button class="mnav-btn" data-tab="potrosene" onclick="switchTab('potrosene')">
+    <span class="mni">🗄</span><span class="mnl">Potroš.</span>
+  </button>
   <button class="mnav-btn" data-tab="raspored" onclick="switchTab('raspored')">
     <span class="mni">🚚</span><span class="mnl">Raspored</span>
   </button>
@@ -855,7 +867,7 @@ let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
-const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','raspored'];
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','potrosene','raspored'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -968,9 +980,10 @@ async function initFirebase() {
     renderAll();
   });
 
-  // Arhiva se više ne koristi (iscrpljene se brišu) — učitaj samo radi čišćenja starih zapisa
   fs.onSnapshot(fs.collection(db, 'arhiva_dispozicija'), snap => {
     arhiva = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    arhiva.sort((a,b) => (b.exhaustedAt||0) - (a.exhaustedAt||0));
+    if (document.querySelector('#tab-potrosene.active')) renderPotrosene();
   });
 
   fs.onSnapshot(fs.collection(db, 'raspored'), snap => {
@@ -1056,6 +1069,8 @@ async function transferDebtAndCleanup(extraDisp) {
       localAdj[target.id] = localAdj[target.id] || {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
       localAdj[target.id][f] = r2(localAdj[target.id][f] + dug);
     }
+    // Arhiviraj (za tab "Potrošene dispozicije" — zadnjih 10 dana) pa obriši iz aktivnih
+    await fbArchiveDisp(d);
     await fbDelDisp(d.id);
   }
   return exhausted.length;
@@ -1065,8 +1080,10 @@ async function autoCleanupExhaustedDisps() {
   const n = await transferDebtAndCleanup();
   if (n > 0) showToast(`🔁 Preneseno dugovanje i obrisano ${n} iscrpljenih dispozicija`, 'success');
 
-  // Očisti eventualne stare arhivske zapise (feature arhiviranja ukinut)
-  for (const d of arhiva) await fbDelArchive(d.id);
+  // Očisti arhivske zapise starije od 10 dana (tab prikazuje samo zadnjih 10 dana)
+  const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000;
+  const old = arhiva.filter(d => (d.exhaustedAt||0) < cutoff);
+  for (const d of old) await fbDelArchive(d.id);
 }
 
 function scheduleAutoCleanup() {
@@ -1119,6 +1136,10 @@ async function fbSetDisp(d) {
 async function fbDelDisp(id) {
   if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'dispozicije', id));
+}
+async function fbArchiveDisp(d) {
+  if (!fs||!db) return;
+  await fs.setDoc(fs.doc(db, 'arhiva_dispozicija', d.id), {...d, exhaustedAt: Date.now()});
 }
 async function fbSetOtp(o) {
   if (!fs||!db) return;
@@ -2159,6 +2180,53 @@ function renderHistorija() {
   list.innerHTML = html;
 }
 
+// ═══════════════════════════════════════════════════════
+//  RENDER – POTROŠENE DISPOZICIJE (historija, zadnjih 10 dana)
+// ═══════════════════════════════════════════════════════
+function renderPotrosene() {
+  const search = (document.getElementById('potrSearch')?.value||'').toLowerCase();
+  const list   = document.getElementById('potroseneList');
+  if (!list) return;
+
+  const cutoff = Date.now() - 10 * 24 * 60 * 60 * 1000;
+  const filtered = arhiva.filter(d => {
+    if ((d.exhaustedAt||0) < cutoff) return false;
+    return !search ||
+      (d.kupac||'').toLowerCase().includes(search) ||
+      (d.broj||'').toLowerCase().includes(search) ||
+      (d.ugovor||'').toLowerCase().includes(search);
+  });
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">🗄</div><p>Nema potrošenih dispozicija u zadnjih 10 dana</p></div>`;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(d => {
+    const dispDat = d.datum ? d.datum.split('-').reverse().join('.') : '—';
+    const exhAt   = d.exhaustedAt
+      ? new Date(d.exhaustedAt).toLocaleString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '—';
+    const amounts = FIELDS.filter(f => d[f] !== 0).map(f =>
+      `<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${(d[f]||0).toFixed(2)} m³</div></div>`
+    ).join('');
+
+    html += `<div class="otprema-card" style="margin-bottom:8px;align-items:flex-start;opacity:0.85">
+      <div style="min-width:170px;flex-shrink:0">
+        <div style="font-family:Syne,sans-serif;font-weight:800;font-size:15px;color:var(--text);margin-bottom:3px">${d.kupac||'—'}</div>
+        <div style="font-size:12px;color:var(--muted)">Br: <strong style="color:var(--text)">${d.broj||'—'}</strong></div>
+        ${d.ugovor ? `<div style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${d.ugovor}</strong></div>` : ''}
+        <div style="font-size:12px;color:var(--muted)">Datum: <strong>${dispDat}</strong></div>
+        <div style="font-size:11px;color:#7a7aaa;margin-top:5px">🗄 Potrošena: ${exhAt}</div>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${amounts||'<span style="color:var(--muted);font-size:13px">—</span>'}</div>
+    </div>`;
+  });
+
+  list.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Potrošene dispozicije u zadnjih 10 dana: <strong>${filtered.length}</strong></div>` + html;
+}
+
 async function deleteOtp(id) {
   const o = otpreme.find(x => x.id === id);
   const linkedExists = o && (dispozicije.some(d => d.id === o.disp_id) || pretprodaje.some(p => p.id === o.disp_id));
@@ -3135,6 +3203,7 @@ function switchTab(t) {
   if(t==='otprema')     renderOtprema();
   if(t==='hist-disp')   renderHistDisp();
   if(t==='historija')   renderHistorija();
+  if(t==='potrosene')   renderPotrosene();
   if(t==='raspored')    renderRaspored();
 }
 
@@ -3147,6 +3216,7 @@ function renderAll() {
   if (names[idx]==='pretprodaja') renderPretprodaja();
   if (names[idx]==='hist-disp')   renderHistDisp();
   if (names[idx]==='historija')   renderHistorija();
+  if (names[idx]==='potrosene')   renderPotrosene();
   if (names[idx]==='raspored')    renderRaspored();
 }
 
