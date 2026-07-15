@@ -1003,14 +1003,63 @@ async function fbDelArchive(id) {
   await fs.deleteDoc(fs.doc(db, 'arhiva_dispozicija', id));
 }
 
-async function autoCleanupExhaustedDisps() {
-  // Briši dispozicije koje su iscrpljene I zamijenjene drugom dispozicijom istog kupca za isti sortiment
-  const exhausted = dispozicije.filter(d => isReplaced(d));
+// Nađe iscrpljene+zamijenjene dispozicije, PRENESE dug (ono što je kupac već
+// primio preko stare dispozicije, a stara ga nije pokrivala) na dispoziciju
+// koja je zamjenjuje — kao otpremu tipa 'adjustment' — pa staru obriše.
+// Bez ovoga bi zamjenska dispozicija ostala prikazana s punim iznosom, iako
+// je dio već "potrošen" preko obrisane stare dispozicije.
+//
+// `extraDisp` (opcionalno): upravo snimljena dispozicija — uključi je u provjeru
+// odmah, prije nego realtime listener stigne osvježiti globalni `dispozicije` niz
+// (izbjegava da se prijenos duga "zakasni" do sljedećeg dnevnog cleanup-a).
+async function transferDebtAndCleanup(extraDisp) {
+  const pool = extraDisp
+    ? [...dispozicije.filter(x => x.id !== extraDisp.id), extraDisp]
+    : dispozicije;
+
+  const exhausted = pool.filter(d => isReplaced(d, pool));
+  if (!exhausted.length) return 0;
+
+  // Prati prijenose izvršene UNUTAR ovog poziva — realtime listener još nije
+  // osvježio globalni `otpreme` niz pa getBalance() ne bi vidio upravo upisane
+  // adjustment-otpreme (isti princip kao syncSpent fix u doSync).
+  const localAdj = {};
+  const effBal = (disp) => {
+    const bal = getBalance(disp);
+    const adj = localAdj[disp.id];
+    if (adj) FIELDS.forEach(f => bal[f] = r2(bal[f] - (adj[f]||0)));
+    return bal;
+  };
+
   for (const d of exhausted) {
+    const bal = getBalance(d);
+    const coveredFields = FIELDS.filter(f => (d[f]||0) > 0);
+    for (const f of coveredFields) {
+      const dug = r2(-bal[f]);
+      if (dug <= 0) continue; // tačno na nuli — nema duga za prijenos
+      const target = pool
+        .filter(other => other.id !== d.id && other.kupac === d.kupac && (other[f]||0) > 0 && effBal(other)[f] > dug)
+        .sort((a,b) => (a.datum||'').localeCompare(b.datum||''))[0];
+      if (!target) continue; // ne bi se smjelo desiti — isReplaced je već potvrdio da postoji
+      const adj = {
+        id: 'adj_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+        kupac: d.kupac, disp_id: target.id, datum: localDateStr(),
+        broj: `Prijenos duga (${d.broj || d.id})`, source: 'adjustment',
+        tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
+      };
+      adj[f] = dug;
+      await fbSetOtp(adj);
+      localAdj[target.id] = localAdj[target.id] || {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+      localAdj[target.id][f] = r2(localAdj[target.id][f] + dug);
+    }
     await fbDelDisp(d.id);
   }
-  if (exhausted.length > 0)
-    showToast(`🗑️ Obrisano ${exhausted.length} iscrpljenih dispozicija`, 'success');
+  return exhausted.length;
+}
+
+async function autoCleanupExhaustedDisps() {
+  const n = await transferDebtAndCleanup();
+  if (n > 0) showToast(`🔁 Preneseno dugovanje i obrisano ${n} iscrpljenih dispozicija`, 'success');
 
   // Očisti eventualne stare arhivske zapise (feature arhiviranja ukinut)
   for (const d of arhiva) await fbDelArchive(d.id);
@@ -1134,7 +1183,10 @@ function balStatus(disp) {
 // Provjeri je li dispozicija "iscrpljena i zamijenjena":
 // sve polja s originalnom kolicinom moraju biti <= 0
 // I kupac mora imati drugu aktivnu dispoziciju s pozitivnim ostatkom za SVAKI isti sortiment
-function isReplaced(disp) {
+// `pool` (opcionalno) — niz dispozicija za pretragu "druge" dispozicije; default je
+// globalni `dispozicije`. Omogućava provjeru odmah nakon snimanja, prije nego
+// realtime listener osvježi globalni niz (vidi transferDebtAndCleanup).
+function isReplaced(disp, pool = dispozicije) {
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
   const bal = getBalance(disp);
@@ -1144,7 +1196,7 @@ function isReplaced(disp) {
   // je VEĆI od duga (ako je minus -5, nova mora imati > 5 da pokrije dug)
   return coveredFields.every(f => {
     const dug = Math.max(0, -bal[f]); // 0 ako je nula, pozitivno ako je minus
-    return dispozicije.some(other =>
+    return pool.some(other =>
       other.id !== disp.id &&
       other.kupac === disp.kupac &&
       (other[f]||0) > 0 &&
@@ -1403,7 +1455,9 @@ async function addDispozicija() {
   };
   await fbSetDisp(d);
   clearNovaForm();
-  showToast(`✅ Dispozicija "${broj}" za "${kupac}" dodana!`, 'success');
+  const transferred = await transferDebtAndCleanup(d);
+  showToast(`✅ Dispozicija "${broj}" za "${kupac}" dodana!` +
+    (transferred ? ` 🔁 Preneseno dugovanje sa ${transferred} iscrpljene dispozicije.` : ''), 'success');
   switchTab('pregled');
 }
 
@@ -1469,7 +1523,9 @@ async function saveDisp() {
   };
   await fbSetDisp(d);
   closeEditModal();
-  showToast(`✅ Dispozicija "${broj}" ažurirana!`, 'success');
+  const transferred = await transferDebtAndCleanup(d);
+  showToast(`✅ Dispozicija "${broj}" ažurirana!` +
+    (transferred ? ` 🔁 Preneseno dugovanje sa ${transferred} iscrpljene dispozicije.` : ''), 'success');
 }
 
 function closeEditModal() {
@@ -1686,6 +1742,8 @@ function showKupacOtpreme(kupac) {
         .map(f => `<span style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;white-space:nowrap">${FL[f]}: <strong>${r2(o[f]).toFixed(2)}</strong></span>`).join(' ');
       const srcBadge = o.source === 'sheet'
         ? '<span class="badge blue">📊 Sheet</span>'
+        : o.source === 'adjustment'
+        ? '<span class="badge" style="background:#3a2a10;border-color:#a86a1a;color:#e0a04a">🔁 Prijenos duga</span>'
         : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
       const ppBadge  = isPretp ? '<span class="badge" style="background:#2a1a38;border-color:#7a3aaa;color:#c47af0">🏷 PP</span>' : '';
       const refBroj  = ppEntry?.broj || disp?.broj || '';
@@ -2044,6 +2102,8 @@ function renderHistorija() {
           .map(f=>`<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${r2(o[f]).toFixed(2)} m³</div></div>`).join('');
         const srcBadge = o.source==='sheet'
           ? '<span class="badge blue">📊 Sheet</span>'
+          : o.source === 'adjustment'
+          ? '<span class="badge" style="background:#3a2a10;border-color:#a86a1a;color:#e0a04a">🔁 Prijenos duga</span>'
           : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
         const unmatch = o.unmatched ? '<span class="badge red">⚠ Neuskl.</span>' : '';
         const ppBadge = isPretp
