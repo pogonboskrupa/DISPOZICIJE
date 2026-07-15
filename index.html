@@ -685,6 +685,10 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
 <div class="modal-bg" id="editModal">
   <div class="modal" style="max-width:700px">
     <h3>✏️ Uredi dispoziciju</h3>
+    <div id="e_hint" style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+      Polja ispod su <strong>ukupno upisana</strong> količina iz dispozicije (ne trenutno stanje).
+      Trenutno stanje = upisano − sve otpreme (uklj. eventualni preneseni dug).
+    </div>
     <input type="hidden" id="e_id">
     <div class="form-grid" style="margin-bottom:14px">
       <div class="form-group" style="grid-column:span 2">
@@ -1500,6 +1504,20 @@ function editDisp(id) {
   document.getElementById('e_fl').value    = d.fl  || '';
   document.getElementById('e_oc').value    = d.oc  || '';
   document.getElementById('e_od').value    = d.od  || '';
+
+  // Prikaži trenutno stanje po polju + eventualni preneseni dug, da se izbjegne
+  // zabuna (polja iznad prikazuju UPISANU količinu, ne stanje)
+  const bal = getBalance(d);
+  const adjOtp = otpreme.filter(o => o.disp_id === d.id && o.source === 'adjustment');
+  const stanjeLines = FIELDS.filter(f => (d[f]||0) !== 0 || bal[f] !== 0).map(f => {
+    const adjSum = r2(adjOtp.reduce((s,o) => s + (o[f]||0), 0));
+    return `${FL[f]}: upisano <strong style="color:var(--text)">${(d[f]||0).toFixed(2)}</strong> → stanje <strong style="color:${bal[f]<0?'var(--red)':'var(--text)'}">${bal[f].toFixed(2)}</strong>${adjSum>0?` <span style="color:#e0a04a">(uklj. preneseni dug ${adjSum.toFixed(2)})</span>`:''}`;
+  });
+  document.getElementById('e_hint').innerHTML =
+    `Polja ispod su <strong>ukupno upisana</strong> količina iz dispozicije (ne trenutno stanje).<br>` +
+    (stanjeLines.length ? stanjeLines.join('<br>') : 'Trenutno stanje = upisano − sve otpreme.') +
+    (adjOtp.length ? `<br><span style="color:#e0a04a">⚠️ Dug je već automatski prenesen sa iscrpljene dispozicije — NE oduzimaj ga ponovo ovdje ručno, samo mijenjaj ukupno dogovorenu/uplaćenu količinu.</span>` : '');
+
   document.getElementById('editModal').classList.add('open');
 }
 
