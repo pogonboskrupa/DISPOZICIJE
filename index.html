@@ -107,6 +107,8 @@ tbody tr:hover{background:var(--surface2);}
 tbody tr:nth-child(even){background:rgba(255,255,255,.012);}
 td{padding:8px 8px;text-align:center;color:var(--muted);white-space:nowrap;}
 td.kupac{text-align:left;font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text);min-width:150px;}
+.kupac-link{cursor:pointer;border-bottom:1px dashed var(--accent);transition:color .15s;}
+.kupac-link:hover{color:var(--accent);}
 td.pos,.pos{color:var(--green);font-weight:600;}
 td.neg,.neg{color:var(--red);font-weight:600;}
 td.warn,.warn{color:var(--accent);font-weight:600;}
@@ -329,7 +331,6 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <button class="tab" onclick="switchTab('otprema')">🚛 Ručna otprema</button>
     <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
-    <button class="tab" onclick="switchTab('iscrpljene')">🗄 Iscrpljene dispozicije</button>
     <button class="tab" onclick="switchTab('raspored')">🚚 Raspored</button>
   </div>
 
@@ -625,14 +626,6 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <div id="historijaList"></div>
   </div>
 
-  <!-- ISCRPLJENE DISPOZICIJE -->
-  <div id="tab-iscrpljene" class="panel">
-    <div class="search-bar">
-      <input type="text" id="iscSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderIscrpljene()">
-    </div>
-    <div id="iscrpljenList"></div>
-  </div>
-
   <!-- RASPORED -->
   <div id="tab-raspored" class="panel">
     <h2 style="margin-bottom:16px">🚚 Raspored kamiona</h2>
@@ -673,6 +666,18 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       <button class="btn btn-success" onclick="confirmOtprema()">✅ Potvrdi</button>
       <button class="btn btn-ghost" onclick="closeModal()">Odustani</button>
     </div>
+  </div>
+</div>
+
+<!-- KUPAC OTPREME MODAL -->
+<div class="modal-bg" id="kupacOtpModal" onclick="if(event.target===this)closeKupacOtpModal()">
+  <div class="modal" style="max-width:640px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h3 id="kupacOtpTitle" style="margin:0">🚛 Otpreme</h3>
+      <button class="btn btn-ghost" style="padding:4px 12px" onclick="closeKupacOtpModal()">✕</button>
+    </div>
+    <div id="kupacOtpSub" style="color:var(--muted);font-size:13px;margin-bottom:16px">Zadnjih 30 dana</div>
+    <div id="kupacOtpList"></div>
   </div>
 </div>
 
@@ -772,9 +777,6 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="historija" onclick="switchTab('historija')">
     <span class="mni">📜</span><span class="mnl">Otpreme</span>
   </button>
-  <button class="mnav-btn" data-tab="iscrpljene" onclick="switchTab('iscrpljene')">
-    <span class="mni">🗄</span><span class="mnl">Iscrplj.</span>
-  </button>
   <button class="mnav-btn" data-tab="raspored" onclick="switchTab('raspored')">
     <span class="mni">🚚</span><span class="mnl">Raspored</span>
   </button>
@@ -849,7 +851,7 @@ let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
-const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','iscrpljene','raspored'];
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','raspored'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -962,13 +964,9 @@ async function initFirebase() {
     renderAll();
   });
 
+  // Arhiva se više ne koristi (iscrpljene se brišu) — učitaj samo radi čišćenja starih zapisa
   fs.onSnapshot(fs.collection(db, 'arhiva_dispozicija'), snap => {
     arhiva = snap.docs.map(d => ({id: d.id, ...d.data()}));
-    arhiva.sort((a,b) => (b.exhaustedAt||0) - (a.exhaustedAt||0));
-    if (document.querySelector('.tab.active')?.dataset?.tab === 'iscrpljene' ||
-        document.querySelector('.mnav-btn.active')?.dataset?.tab === 'iscrpljene') {
-      renderIscrpljene();
-    }
   });
 
   fs.onSnapshot(fs.collection(db, 'raspored'), snap => {
@@ -1000,30 +998,22 @@ async function initFirebase() {
   scheduleAutoCleanup();
 }
 
-async function fbArchiveDisp(d) {
-  if (!fs||!db) return;
-  const archiveDoc = {...d, exhaustedAt: Date.now()};
-  await fs.setDoc(fs.doc(db, 'arhiva_dispozicija', d.id), archiveDoc);
-}
 async function fbDelArchive(id) {
   if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'arhiva_dispozicija', id));
 }
 
 async function autoCleanupExhaustedDisps() {
-  // Arhiviraj samo dispozicije koje su iscrpljene I zamijenjene drugom dispozicijom istog kupca za isti sortiment
+  // Briši dispozicije koje su iscrpljene I zamijenjene drugom dispozicijom istog kupca za isti sortiment
   const exhausted = dispozicije.filter(d => isReplaced(d));
   for (const d of exhausted) {
-    await fbArchiveDisp(d);
     await fbDelDisp(d.id);
   }
   if (exhausted.length > 0)
-    showToast(`🗄️ Arhivirano ${exhausted.length} iscrpljenih dispozicija`, 'success');
+    showToast(`🗑️ Obrisano ${exhausted.length} iscrpljenih dispozicija`, 'success');
 
-  // Briši arhivske zapise starije od 30 dana
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const old30 = arhiva.filter(d => (d.exhaustedAt||0) < cutoff);
-  for (const d of old30) await fbDelArchive(d.id);
+  // Očisti eventualne stare arhivske zapise (feature arhiviranja ukinut)
+  for (const d of arhiva) await fbDelArchive(d.id);
 }
 
 function scheduleAutoCleanup() {
@@ -1264,7 +1254,7 @@ function renderPregled() {
       const st     = balStatus(d);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
       html += `<tr${isNewGroup ? ' class="kupac-first"' : ''}>
-        <td class="kupac">${isNewGroup ? kupac : ''}</td>
+        <td class="kupac">${isNewGroup ? `<span class="kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</span>` : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
         <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
         <td style="font-size:15px;color:var(--text)">${d.ugovor||''}</td>
@@ -1314,7 +1304,7 @@ function renderPregled() {
       const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('.') + '.' + d.datum.slice(2,4) : '—';
       mhtml += `<div class="mob-card">
         <div class="mob-head">
-          <div class="mob-kupac">${kupac}</div>
+          <div class="mob-kupac kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</div>
           <div style="font-size:13px;font-weight:700;${datumColor(d.datum)}">${datFmt}</div>
         </div>
         <div class="mob-meta">
@@ -1660,6 +1650,53 @@ async function confirmOtprema() {
 function closeModal() {
   document.getElementById('confirmModal').classList.remove('open');
   pendingOtp = null;
+}
+
+function closeKupacOtpModal() {
+  document.getElementById('kupacOtpModal').classList.remove('open');
+}
+
+// Klik na kupca → zadnje otpreme tog kupca u zadnjih 30 dana
+function showKupacOtpreme(kupac) {
+  const cutoffStr = localDateStr(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const rows = otpreme
+    .filter(o => o.kupac === kupac && (o.datum || '') >= cutoffStr)
+    .sort((a, b) => (b.datum||'').localeCompare(a.datum||'') || (b.id||'').localeCompare(a.id||''));
+
+  document.getElementById('kupacOtpTitle').textContent = `🚛 ${kupac}`;
+
+  const totalM3 = rows.reduce((s, o) => s + FIELDS.reduce((ss, f) => ss + (o[f]||0), 0), 0);
+  document.getElementById('kupacOtpSub').innerHTML =
+    `Zadnjih 30 dana · <strong style="color:var(--text)">${rows.length}</strong> otprema · <strong style="color:var(--text)">${totalM3.toFixed(2)} m³</strong>`;
+
+  const list = document.getElementById('kupacOtpList');
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">📭</div><p>Nema otprema u zadnjih 30 dana</p></div>`;
+  } else {
+    list.innerHTML = rows.map(o => {
+      const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
+      const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
+      const isPretp  = !!ppEntry || !!(o.odjel && o.klasa);
+      const datFmt   = o.datum ? o.datum.split('-').reverse().join('.') : '—';
+      const vals     = FIELDS.filter(f => o[f] > 0)
+        .map(f => `<span style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;white-space:nowrap">${FL[f]}: <strong>${r2(o[f]).toFixed(2)}</strong></span>`).join(' ');
+      const srcBadge = o.source === 'sheet'
+        ? '<span class="badge blue">📊 Sheet</span>'
+        : '<span class="badge" style="color:var(--muted)">✋ Ručno</span>';
+      const ppBadge  = isPretp ? '<span class="badge" style="background:#2a1a38;border-color:#7a3aaa;color:#c47af0">🏷 PP</span>' : '';
+      const refBroj  = ppEntry?.broj || disp?.broj || '';
+      return `<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px${isPretp?';border-left:3px solid #7a3aaa':''}">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <strong style="font-size:14px;color:var(--accent)">${datFmt}</strong>
+          ${srcBadge}${ppBadge}
+          ${refBroj ? `<span class="badge">${refBroj}</span>` : ''}
+          ${o.broj ? `<span class="badge green">${o.broj}</span>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${vals || '<span style="color:var(--muted);font-size:12px">nema količina</span>'}</div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('kupacOtpModal').classList.add('open');
 }
 
 function checkPPOnDate() {
@@ -2988,86 +3025,6 @@ function renderHistDisp() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  RENDER – ISCRPLJENE DISPOZICIJE
-// ═══════════════════════════════════════════════════════
-function renderIscrpljene() {
-  const search = (document.getElementById('iscSearch')?.value||'').toLowerCase();
-  const list   = document.getElementById('iscrpljenList');
-  if (!list) return;
-
-  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-
-  // Iz arhive (dispozicije iscrpljene i arhivirane u zadnjih 30 dana)
-  const fromArchive = arhiva.filter(d => {
-    if ((d.exhaustedAt||0) < cutoff) return false;
-    return !search ||
-      (d.kupac||'').toLowerCase().includes(search) ||
-      (d.broj||'').toLowerCase().includes(search) ||
-      (d.ugovor||'').toLowerCase().includes(search);
-  });
-
-  // Iz aktivnih dispozicija koje su iscrpljene+zamijenjene ali još nisu arhivirane (do 06:00)
-  const fromActive = dispozicije.filter(d => {
-    if (!isReplaced(d)) return false;
-    if (arhiva.find(a => a.id === d.id)) return false;
-    return !search ||
-      (d.kupac||'').toLowerCase().includes(search) ||
-      (d.broj||'').toLowerCase().includes(search) ||
-      (d.ugovor||'').toLowerCase().includes(search);
-  });
-
-  // Spoji i sortiraj: arhivirane po datumu iscrpljivanja, aktivne na kraj
-  const all = [
-    ...fromArchive,
-    ...fromActive.map(d => ({...d, exhaustedAt: null}))
-  ];
-
-  if (!all.length) {
-    list.innerHTML = `<div class="empty-state"><div class="big">🗄</div><p>Nema iscrpljenih dispozicija u zadnjih 30 dana</p></div>`;
-    return;
-  }
-
-  let html = '';
-  all.forEach(d => {
-    const bal      = getBalance(d);
-    const total    = FIELDS.reduce((s,f) => s + (d[f]||0), 0);
-    const remain   = FIELDS.reduce((s,f) => s + bal[f], 0);
-    const dispDat  = d.datum ? d.datum.split('-').reverse().join('.') : '—';
-    const oCount   = otpreme.filter(o => o.disp_id === d.id).length;
-    const iscrpAt  = d.exhaustedAt
-      ? new Date(d.exhaustedAt).toLocaleString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
-      : 'Čeka arhiviranje (06:00h)';
-
-    const amounts = FIELDS.filter(f => d[f] > 0).map(f => {
-      const orig = d[f], rem = bal[f];
-      const cls  = rem < 0 ? 'neg' : rem < orig * 0.2 ? 'warn' : 'pos';
-      const pct  = Math.max(0, Math.min(100, orig > 0 ? rem/orig*100 : 0));
-      const barCls = rem < 0 ? 'prog-neg' : rem < orig * 0.2 ? 'prog-warn' : 'prog-ok';
-      return `<div class="val-item">
-        <div class="vl">${FL[f]}</div>
-        <div class="vv"><span class="${cls}">${rem.toFixed(2)}</span><span style="color:var(--muted);font-size:11px"> / ${orig.toFixed(2)}</span></div>
-        <div class="prog-wrap"><div class="prog-bar ${barCls}" style="width:${pct}%"></div></div>
-      </div>`;
-    }).join('');
-
-    html += `<div class="otprema-card" style="margin-bottom:8px;align-items:flex-start;opacity:0.85">
-      <div style="min-width:170px;flex-shrink:0">
-        <div style="font-family:Syne,sans-serif;font-weight:800;font-size:15px;color:var(--text);margin-bottom:3px">${d.kupac||'—'}</div>
-        <div style="font-size:12px;color:var(--muted)">Br: <strong style="color:var(--text)">${d.broj||'—'}</strong></div>
-        ${d.ugovor ? `<div style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${d.ugovor}</strong></div>` : ''}
-        <div style="font-size:12px;color:var(--muted)">Datum: <strong>${dispDat}</strong></div>
-        ${oCount > 0 ? `<div style="font-size:12px;color:var(--muted)">${oCount} otprema</div>` : ''}
-        <div style="font-size:11px;color:#7a7aaa;margin-top:5px">🗄 ${iscrpAt}</div>
-        <div style="margin-top:4px"><span style="font-size:11px;color:#7a7aaa;font-weight:600">≈ Iscrpljeno</span></div>
-      </div>
-      <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${amounts||'<span style="color:var(--muted);font-size:13px">—</span>'}</div>
-    </div>`;
-  });
-
-  list.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Iscrpljene dispozicije u zadnjih 30 dana: <strong>${all.length}</strong></div>` + html;
-}
-
-// ═══════════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════════
 function toggleDesktopView(isDesktop) {
@@ -3096,7 +3053,6 @@ function switchTab(t) {
   if(t==='otprema')     renderOtprema();
   if(t==='hist-disp')   renderHistDisp();
   if(t==='historija')   renderHistorija();
-  if(t==='iscrpljene')  renderIscrpljene();
   if(t==='raspored')    renderRaspored();
 }
 
@@ -3109,7 +3065,6 @@ function renderAll() {
   if (names[idx]==='pretprodaja') renderPretprodaja();
   if (names[idx]==='hist-disp')   renderHistDisp();
   if (names[idx]==='historija')   renderHistorija();
-  if (names[idx]==='iscrpljene')  renderIscrpljene();
   if (names[idx]==='raspored')    renderRaspored();
 }
 
