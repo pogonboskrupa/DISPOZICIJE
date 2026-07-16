@@ -667,8 +667,8 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <div class="modal" style="max-width:700px">
     <h3>✏️ Uredi dispoziciju</h3>
     <div id="e_hint" style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
-      Polja ispod su <strong>ukupno upisana</strong> količina iz dispozicije (ne trenutno stanje).
-      Trenutno stanje = upisano − sve otpreme (uklj. eventualni preneseni dug).
+      Polja ispod su <strong>trenutno stanje</strong> po sortimentu (koliko je preostalo za otpremiti).
+      Šta upišeš, to će i pisati — odmah nakon spremanja.
     </div>
     <input type="hidden" id="e_id">
     <div class="form-grid" style="margin-bottom:14px">
@@ -1191,17 +1191,18 @@ function balStatus(disp, cache) {
   return 'ok';
 }
 
-// Provjeri je li dispozicija "iscrpljena i zamijenjena":
-// Dispečer je RUČNO upisao minus (dug) direktno u polje dispozicije u Edit formi
-// (npr. da zabilježi poznati dug bez čekanja na automatski prijenos). Takva
-// dispozicija se NIKAD automatski ne dira — ne arhivira/briše se, i ne koristi
-// se kao cilj za tuđi prijenos duga — čak i ako neko DRUGO polje na istoj
-// dispoziciji ispuni uslove za automatsko čišćenje. Ostaje tačno kako je upisano
-// dok je dispečer ručno ne izmijeni.
+// Dispečer je u Edit formi RUČNO upisao negativno stanje (dug) za neki sortiment
+// (npr. da zabilježi poznati dug bez čekanja na automatski prijenos). saveDisp()
+// tada postavi `manualDebtFlag: true` na dispoziciju. Takva dispozicija se NIKAD
+// automatski ne dira — ne arhivira/briše se, i ne koristi se kao cilj za tuđi
+// prijenos duga — čak i ako je izračunato "upisano" polje (stanje+već potrošeno)
+// ispalo pozitivno. Fleg se briše čim dispečer ponovo sačuva dispoziciju bez
+// ijednog negativnog polja (isReplaced/isZeroedOut se tada normalno primjenjuju).
 function hasManualDebt(disp) {
-  return FIELDS.some(f => (disp[f]||0) < 0);
+  return !!disp.manualDebtFlag;
 }
 
+// Provjeri je li dispozicija "iscrpljena i zamijenjena":
 // sve polja s originalnom kolicinom moraju biti <= 0
 // I kupac mora imati drugu aktivnu dispoziciju s pozitivnim ostatkom za SVAKI isti sortiment
 // `pool` (opcionalno) — niz dispozicija za pretragu "druge" dispozicije; default je
@@ -1496,6 +1497,7 @@ async function addDispozicija() {
     oc:  parseFloat(document.getElementById('n_oc').value)||0,
     od:  parseFloat(document.getElementById('n_od').value)||0,
   };
+  if (FIELDS.some(f => d[f] < 0)) d.manualDebtFlag = true;
   await fbSetDisp(d);
   clearNovaForm();
   const cleaned = await transferDebtAndCleanup(d);
@@ -1535,27 +1537,15 @@ function editDisp(id) {
   document.getElementById('e_broj').value  = d.broj  || '';
   document.getElementById('e_datum').value = d.datum || '';
   document.getElementById('e_ugovor').value= d.ugovor|| '';
-  document.getElementById('e_tc').value    = d.tc  || '';
-  document.getElementById('e_rud').value   = d.rud || '';
-  document.getElementById('e_cd').value    = d.cd  || '';
-  document.getElementById('e_cc').value    = d.cc  || '';
-  document.getElementById('e_tl').value    = d.tl  || '';
-  document.getElementById('e_fl').value    = d.fl  || '';
-  document.getElementById('e_oc').value    = d.oc  || '';
-  document.getElementById('e_od').value    = d.od  || '';
 
-  // Prikaži trenutno stanje po polju + eventualni preneseni dug, da se izbjegne
-  // zabuna (polja iznad prikazuju UPISANU količinu, ne stanje)
+  // Polja prikazuju TRENUTNO STANJE (bal), ne upisanu/originalnu količinu —
+  // saveDisp() preračunava nazad u "upisano" tako da nakon spremanja stanje
+  // bude TAČNO ono što je ovdje upisano (vidi saveDisp).
   const bal = getBalance(d);
-  const adjOtp = otpreme.filter(o => o.disp_id === d.id && o.source === 'adjustment');
-  const stanjeLines = FIELDS.filter(f => (d[f]||0) !== 0 || bal[f] !== 0).map(f => {
-    const adjSum = r2(adjOtp.reduce((s,o) => s + (o[f]||0), 0));
-    return `${FL[f]}: upisano <strong style="color:var(--text)">${(d[f]||0).toFixed(2)}</strong> → stanje <strong style="color:${bal[f]<0?'var(--red)':'var(--text)'}">${bal[f].toFixed(2)}</strong>${adjSum>0?` <span style="color:#e0a04a">(uklj. preneseni dug ${adjSum.toFixed(2)})</span>`:''}`;
+  FIELDS.forEach(f => {
+    const el = document.getElementById('e_'+f);
+    if (el) el.value = bal[f] || '';
   });
-  document.getElementById('e_hint').innerHTML =
-    `Polja ispod su <strong>ukupno upisana</strong> količina iz dispozicije (ne trenutno stanje).<br>` +
-    (stanjeLines.length ? stanjeLines.join('<br>') : 'Trenutno stanje = upisano − sve otpreme.') +
-    (adjOtp.length ? `<br><span style="color:#e0a04a">⚠️ Dug je već automatski prenesen sa iscrpljene dispozicije — NE oduzimaj ga ponovo ovdje ručno, samo mijenjaj ukupno dogovorenu/uplaćenu količinu.</span>` : '');
 
   document.getElementById('editModal').classList.add('open');
 }
@@ -1565,19 +1555,28 @@ async function saveDisp() {
   const kupac = document.getElementById('e_kupac').value.trim();
   const broj  = document.getElementById('e_broj').value.trim();
   if (!kupac||!broj) { showToast('Kupac i broj su obavezni!','error'); return; }
+
+  // Polja u formi su TRENUTNO STANJE (vidi editDisp) — pretvori nazad u
+  // "upisano" tako da odmah nakon spremanja getBalance() vrati TAČNO ono što
+  // je ovdje upisano: upisano = uneseno_stanje + već_potrošeno do danas.
+  const _todayStr = localDateStr();
+  const spent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+  otpreme.filter(o => o.disp_id === id && (!o.datum || o.datum <= _todayStr))
+    .forEach(o => FIELDS.forEach(f => spent[f] += (o[f]||0)));
+
   const d = {
     id, kupac, broj,
     datum:  document.getElementById('e_datum').value,
     ugovor: document.getElementById('e_ugovor').value.trim(),
-    tc:  parseFloat(document.getElementById('e_tc').value)  || 0,
-    rud: parseFloat(document.getElementById('e_rud').value) || 0,
-    cd:  parseFloat(document.getElementById('e_cd').value)  || 0,
-    cc:  parseFloat(document.getElementById('e_cc').value)  || 0,
-    tl:  parseFloat(document.getElementById('e_tl').value)  || 0,
-    fl:  parseFloat(document.getElementById('e_fl').value)  || 0,
-    oc:  parseFloat(document.getElementById('e_oc').value)  || 0,
-    od:  parseFloat(document.getElementById('e_od').value)  || 0,
   };
+  let manualDebt = false;
+  FIELDS.forEach(f => {
+    const stanje = parseFloat(document.getElementById('e_'+f).value) || 0;
+    if (stanje < 0) manualDebt = true;
+    d[f] = r2(stanje + spent[f]);
+  });
+  if (manualDebt) d.manualDebtFlag = true;
+
   await fbSetDisp(d);
   closeEditModal();
   const cleaned = await transferDebtAndCleanup(d);
