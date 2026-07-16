@@ -1019,7 +1019,7 @@ async function transferDebtAndCleanup(extraDisp) {
       const dug = r2(-bal[f]);
       if (dug <= 0) continue; // tačno na nuli — nema duga za prijenos
       const target = pool
-        .filter(other => other.id !== d.id && kupacMatch(other.kupac, d.kupac) && (other[f]||0) > 0 && effBal(other)[f] > dug)
+        .filter(other => other.id !== d.id && kupacMatch(other.kupac, d.kupac) && !hasManualDebt(other) && (other[f]||0) > 0 && effBal(other)[f] > dug)
         .sort((a,b) => (a.datum||'').localeCompare(b.datum||''))[0];
       if (!target) continue; // ne bi se smjelo desiti — isReplaced je već potvrdio da postoji
       const adj = {
@@ -1192,6 +1192,16 @@ function balStatus(disp, cache) {
 }
 
 // Provjeri je li dispozicija "iscrpljena i zamijenjena":
+// Dispečer je RUČNO upisao minus (dug) direktno u polje dispozicije u Edit formi
+// (npr. da zabilježi poznati dug bez čekanja na automatski prijenos). Takva
+// dispozicija se NIKAD automatski ne dira — ne arhivira/briše se, i ne koristi
+// se kao cilj za tuđi prijenos duga — čak i ako neko DRUGO polje na istoj
+// dispoziciji ispuni uslove za automatsko čišćenje. Ostaje tačno kako je upisano
+// dok je dispečer ručno ne izmijeni.
+function hasManualDebt(disp) {
+  return FIELDS.some(f => (disp[f]||0) < 0);
+}
+
 // sve polja s originalnom kolicinom moraju biti <= 0
 // I kupac mora imati drugu aktivnu dispoziciju s pozitivnim ostatkom za SVAKI isti sortiment
 // `pool` (opcionalno) — niz dispozicija za pretragu "druge" dispozicije; default je
@@ -1201,6 +1211,7 @@ function balStatus(disp, cache) {
 // isReplaced() zove za SVAKU dispoziciju u jednom renderu (npr. renderPregled),
 // bez čega bi svaki poziv iznova računao getBalance() za sve "druge" kandidate.
 function isReplaced(disp, pool = dispozicije, cache) {
+  if (hasManualDebt(disp)) return false;
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
   const bal = getBalance(disp, cache);
@@ -1213,6 +1224,7 @@ function isReplaced(disp, pool = dispozicije, cache) {
     return pool.some(other =>
       other.id !== disp.id &&
       kupacMatch(other.kupac, disp.kupac) &&
+      !hasManualDebt(other) && // ne koristi dispoziciju s ručno upisanim minusom kao pokriće
       (other[f]||0) > 0 &&
       getBalance(other, cache)[f] > dug  // nova mora pokriti dug
     );
@@ -1224,6 +1236,7 @@ function isReplaced(disp, pool = dispozicije, cache) {
 // isReplaced() koja traži pokriće za MINUS. Nulirana se briše odmah,
 // bez traženja zamjenske dispozicije.
 function isZeroedOut(disp, cache) {
+  if (hasManualDebt(disp)) return false;
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
   const bal = getBalance(disp, cache);
@@ -1542,7 +1555,8 @@ function editDisp(id) {
   document.getElementById('e_hint').innerHTML =
     `Polja ispod su <strong>ukupno upisana</strong> količina iz dispozicije (ne trenutno stanje).<br>` +
     (stanjeLines.length ? stanjeLines.join('<br>') : 'Trenutno stanje = upisano − sve otpreme.') +
-    (adjOtp.length ? `<br><span style="color:#e0a04a">⚠️ Dug je već automatski prenesen sa iscrpljene dispozicije — NE oduzimaj ga ponovo ovdje ručno, samo mijenjaj ukupno dogovorenu/uplaćenu količinu.</span>` : '');
+    (adjOtp.length ? `<br><span style="color:#e0a04a">⚠️ Dug je već automatski prenesen sa iscrpljene dispozicije — NE oduzimaj ga ponovo ovdje ručno, samo mijenjaj ukupno dogovorenu/uplaćenu količinu.</span>` : '') +
+    `<br><span style="color:var(--muted)">ℹ️ Ako u neko polje upišeš negativnu vrijednost (minus/dug), ostaje tačno kako upišeš — sistem tu dispoziciju nikad automatski ne mijenja, ne prenosi dug s nje i ne briše je dok je ručno ne izmijeniš.</span>`;
 
   document.getElementById('editModal').classList.add('open');
 }
@@ -1742,7 +1756,7 @@ async function confirmOtprema() {
     for (const [disp_id, qtys] of Object.entries(splits)) {
       const preBal = preBalances[disp_id];
       const disp   = kandidati.find(d => d.id === disp_id);
-      if (!preBal || !disp) continue;
+      if (!preBal || !disp || hasManualDebt(disp)) continue; // ručno upisan minus — ne diraj
       const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
       const zeroed = coveredFields.length > 0 &&
         coveredFields.every(f => r2((preBal[f] || 0) - (qtys[f] || 0)) === 0);
