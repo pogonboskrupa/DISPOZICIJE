@@ -398,17 +398,17 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </div>
       <div class="section-label">🌲 ČETINARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="n_tc" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Rudno / RD (m³)</label><input type="number" id="n_rud" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="n_cd" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="n_cc" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci I-III (m³)</label><input type="text" inputmode="decimal" id="n_tc" placeholder="0.00"></div>
+        <div class="form-group"><label>Rudno / RD (m³)</label><input type="text" inputmode="decimal" id="n_rud" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Duga (m³)</label><input type="text" inputmode="decimal" id="n_cd" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="text" inputmode="decimal" id="n_cc" placeholder="0.00"></div>
       </div>
       <div class="section-label">🍂 LIŠĆARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="n_tl" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>F/L L (m³)</label><input type="number" id="n_fl" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="n_oc" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="n_od" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci I-III (m³)</label><input type="text" inputmode="decimal" id="n_tl" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L L (m³)</label><input type="text" inputmode="decimal" id="n_fl" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="text" inputmode="decimal" id="n_oc" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="text" inputmode="decimal" id="n_od" placeholder="0.00"></div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="addDispozicija()">💾 Spremi u bazu</button>
@@ -464,23 +464,23 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </div>
       <div class="section-label">🌲 ČETINARI</div>
       <div class="form-grid" id="bpp_cetinari_grid">
-        <div class="form-group"><label>F/L</label><input type="number" id="bpp_FL" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>I klasa</label><input type="number" id="bpp_I" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>II klasa</label><input type="number" id="bpp_II" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>III klasa</label><input type="number" id="bpp_III" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Rudno/Šip</label><input type="number" id="bpp_RUDNO" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel.Duga</label><input type="number" id="bpp_CELD" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel.Cijepana</label><input type="number" id="bpp_CELC" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Škart</label><input type="number" id="bpp_SKART" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L</label><input type="text" inputmode="decimal" id="bpp_FL" placeholder="0.00"></div>
+        <div class="form-group"><label>I klasa</label><input type="text" inputmode="decimal" id="bpp_I" placeholder="0.00"></div>
+        <div class="form-group"><label>II klasa</label><input type="text" inputmode="decimal" id="bpp_II" placeholder="0.00"></div>
+        <div class="form-group"><label>III klasa</label><input type="text" inputmode="decimal" id="bpp_III" placeholder="0.00"></div>
+        <div class="form-group"><label>Rudno/Šip</label><input type="text" inputmode="decimal" id="bpp_RUDNO" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel.Duga</label><input type="text" inputmode="decimal" id="bpp_CELD" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel.Cijepana</label><input type="text" inputmode="decimal" id="bpp_CELC" placeholder="0.00"></div>
+        <div class="form-group"><label>Škart</label><input type="text" inputmode="decimal" id="bpp_SKART" placeholder="0.00"></div>
       </div>
       <div class="section-label">🍂 LIŠĆARI</div>
       <div class="form-grid" id="bpp_liscari_grid">
-        <div class="form-group"><label>F/L L</label><input type="number" id="bpp_FLL" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>I klasa L</label><input type="number" id="bpp_IL" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>II klasa L</label><input type="number" id="bpp_IIL" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>III klasa L</label><input type="number" id="bpp_IIIL" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr.Dugi</label><input type="number" id="bpp_OD" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr.Cijepani</label><input type="number" id="bpp_OC" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L L</label><input type="text" inputmode="decimal" id="bpp_FLL" placeholder="0.00"></div>
+        <div class="form-group"><label>I klasa L</label><input type="text" inputmode="decimal" id="bpp_IL" placeholder="0.00"></div>
+        <div class="form-group"><label>II klasa L</label><input type="text" inputmode="decimal" id="bpp_IIL" placeholder="0.00"></div>
+        <div class="form-group"><label>III klasa L</label><input type="text" inputmode="decimal" id="bpp_IIIL" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr.Dugi</label><input type="text" inputmode="decimal" id="bpp_OD" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr.Cijepani</label><input type="text" inputmode="decimal" id="bpp_OC" placeholder="0.00"></div>
       </div>
       <p style="font-size:12px;color:var(--muted);margin-top:10px">Klase s količinom 0 se neće kreirati. Svaka klasa dobija poseban zapis.</p>
       <div class="form-actions">
@@ -538,17 +538,17 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </div>
       <div class="section-label">🌲 ČETINARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci / F/L Č (m³)</label><input type="number" id="pp_tc" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Škart / Rudno (m³)</label><input type="number" id="pp_rud" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="pp_cd" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="pp_cc" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci / F/L Č (m³)</label><input type="text" inputmode="decimal" id="pp_tc" placeholder="0.00"></div>
+        <div class="form-group"><label>Škart / Rudno (m³)</label><input type="text" inputmode="decimal" id="pp_rud" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Duga (m³)</label><input type="text" inputmode="decimal" id="pp_cd" placeholder="0.00"></div>
+        <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="text" inputmode="decimal" id="pp_cc" placeholder="0.00"></div>
       </div>
       <div class="section-label">🍂 LIŠĆARI</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci L (m³)</label><input type="number" id="pp_tl" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>F/L L (m³)</label><input type="number" id="pp_fl" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="pp_oc" step="0.01" placeholder="0.00"></div>
-        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="pp_od" step="0.01" placeholder="0.00"></div>
+        <div class="form-group"><label>Trupci L (m³)</label><input type="text" inputmode="decimal" id="pp_tl" placeholder="0.00"></div>
+        <div class="form-group"><label>F/L L (m³)</label><input type="text" inputmode="decimal" id="pp_fl" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="text" inputmode="decimal" id="pp_oc" placeholder="0.00"></div>
+        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="text" inputmode="decimal" id="pp_od" placeholder="0.00"></div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="addPretprodajaEntry()">💾 Spremi u bazu</button>
@@ -591,14 +591,14 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </div>
       <div class="section-label">📦 Količine otpreme</div>
       <div class="form-grid">
-        <div class="form-group"><label>Trupci Č (m³)</label><input type="number" id="o_tc" step="0.01" placeholder="0.00" oninput="chkAvail('tc')"></div>
-        <div class="form-group"><label>Rudno (m³)</label><input type="number" id="o_rud" step="0.01" placeholder="0.00" oninput="chkAvail('rud')"></div>
-        <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="o_cd" step="0.01" placeholder="0.00" oninput="chkAvail('cd')"></div>
-        <div class="form-group"><label>Cel. Cij. (m³)</label><input type="number" id="o_cc" step="0.01" placeholder="0.00" oninput="chkAvail('cc')"></div>
-        <div class="form-group"><label>Trupci L (m³)</label><input type="number" id="o_tl" step="0.01" placeholder="0.00" oninput="chkAvail('tl')"></div>
-        <div class="form-group"><label>F/L (m³)</label><input type="number" id="o_fl" step="0.01" placeholder="0.00" oninput="chkAvail('fl')"></div>
-        <div class="form-group"><label>Ogr. Cij. (m³)</label><input type="number" id="o_oc" step="0.01" placeholder="0.00" oninput="chkAvail('oc')"></div>
-        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="o_od" step="0.01" placeholder="0.00" oninput="chkAvail('od')"></div>
+        <div class="form-group"><label>Trupci Č (m³)</label><input type="text" inputmode="decimal" id="o_tc" placeholder="0.00" oninput="chkAvail('tc')"></div>
+        <div class="form-group"><label>Rudno (m³)</label><input type="text" inputmode="decimal" id="o_rud" placeholder="0.00" oninput="chkAvail('rud')"></div>
+        <div class="form-group"><label>Cel. Duga (m³)</label><input type="text" inputmode="decimal" id="o_cd" placeholder="0.00" oninput="chkAvail('cd')"></div>
+        <div class="form-group"><label>Cel. Cij. (m³)</label><input type="text" inputmode="decimal" id="o_cc" placeholder="0.00" oninput="chkAvail('cc')"></div>
+        <div class="form-group"><label>Trupci L (m³)</label><input type="text" inputmode="decimal" id="o_tl" placeholder="0.00" oninput="chkAvail('tl')"></div>
+        <div class="form-group"><label>F/L (m³)</label><input type="text" inputmode="decimal" id="o_fl" placeholder="0.00" oninput="chkAvail('fl')"></div>
+        <div class="form-group"><label>Ogr. Cij. (m³)</label><input type="text" inputmode="decimal" id="o_oc" placeholder="0.00" oninput="chkAvail('oc')"></div>
+        <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="text" inputmode="decimal" id="o_od" placeholder="0.00" oninput="chkAvail('od')"></div>
       </div>
       <div id="oWarn" style="color:var(--red);font-size:13px;margin-top:10px;min-height:18px;"></div>
       <div class="form-actions">
@@ -691,17 +691,17 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     </div>
     <div class="section-label">🌲 ČETINARI</div>
     <div class="form-grid" style="margin-bottom:14px">
-      <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="e_tc" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Rudno / RD (m³)</label><input type="number" id="e_rud" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Cel. Duga (m³)</label><input type="number" id="e_cd" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="number" id="e_cc" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Trupci I-III (m³)</label><input type="text" inputmode="decimal" id="e_tc" placeholder="0.00"></div>
+      <div class="form-group"><label>Rudno / RD (m³)</label><input type="text" inputmode="decimal" id="e_rud" placeholder="0.00"></div>
+      <div class="form-group"><label>Cel. Duga (m³)</label><input type="text" inputmode="decimal" id="e_cd" placeholder="0.00"></div>
+      <div class="form-group"><label>Cel. Cijepana (m³)</label><input type="text" inputmode="decimal" id="e_cc" placeholder="0.00"></div>
     </div>
     <div class="section-label">🍂 LIŠĆARI</div>
     <div class="form-grid" style="margin-bottom:18px">
-      <div class="form-group"><label>Trupci I-III (m³)</label><input type="number" id="e_tl" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>F/L L (m³)</label><input type="number" id="e_fl" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="number" id="e_oc" step="0.01" placeholder="0.00"></div>
-      <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="number" id="e_od" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label>Trupci I-III (m³)</label><input type="text" inputmode="decimal" id="e_tl" placeholder="0.00"></div>
+      <div class="form-group"><label>F/L L (m³)</label><input type="text" inputmode="decimal" id="e_fl" placeholder="0.00"></div>
+      <div class="form-group"><label>Ogr. Cijepani (m³)</label><input type="text" inputmode="decimal" id="e_oc" placeholder="0.00"></div>
+      <div class="form-group"><label>Ogr. Dugi (m³)</label><input type="text" inputmode="decimal" id="e_od" placeholder="0.00"></div>
     </div>
     <div style="display:flex;gap:10px;">
       <button class="btn btn-primary" onclick="saveDisp()">💾 Spremi promjene</button>
@@ -780,6 +780,8 @@ const BAZA_SHEET = 'SPISAK KUPACA';
 const FIELDS = ['tc','rud','cd','cc','tl','fl','oc','od'];
 const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
 const r2 = x => Math.round(x * 100) / 100;
+// Parsira broj iz unosa dopuštajući i zarez i tačku kao decimalni separator (npr. "30,33" ili "30.33")
+const parseNum = v => parseFloat(String(v ?? '').trim().replace(',', '.')) || 0;
 
 // Poklapanje imena kupaca: tačno poklapanje uvijek; podstring poklapanje
 // samo kad su OBA imena ≥5 znakova (sprječava da se npr. 'BOR' poklopi
@@ -1488,14 +1490,14 @@ async function addDispozicija() {
     kupac, broj,
     datum:  document.getElementById('n_datum').value,
     ugovor: document.getElementById('n_ugovor').value.trim(),
-    tc:  parseFloat(document.getElementById('n_tc').value)||0,
-    rud: parseFloat(document.getElementById('n_rud').value)||0,
-    cd:  parseFloat(document.getElementById('n_cd').value)||0,
-    cc:  parseFloat(document.getElementById('n_cc').value)||0,
-    tl:  parseFloat(document.getElementById('n_tl').value)||0,
-    fl:  parseFloat(document.getElementById('n_fl').value)||0,
-    oc:  parseFloat(document.getElementById('n_oc').value)||0,
-    od:  parseFloat(document.getElementById('n_od').value)||0,
+    tc:  parseNum(document.getElementById('n_tc').value),
+    rud: parseNum(document.getElementById('n_rud').value),
+    cd:  parseNum(document.getElementById('n_cd').value),
+    cc:  parseNum(document.getElementById('n_cc').value),
+    tl:  parseNum(document.getElementById('n_tl').value),
+    fl:  parseNum(document.getElementById('n_fl').value),
+    oc:  parseNum(document.getElementById('n_oc').value),
+    od:  parseNum(document.getElementById('n_od').value),
   };
   if (FIELDS.some(f => d[f] < 0)) d.manualDebtFlag = true;
   await fbSetDisp(d);
@@ -1571,7 +1573,7 @@ async function saveDisp() {
   };
   let manualDebt = false;
   FIELDS.forEach(f => {
-    const stanje = parseFloat(document.getElementById('e_'+f).value) || 0;
+    const stanje = parseNum(document.getElementById('e_'+f).value);
     if (stanje < 0) manualDebt = true;
     d[f] = r2(stanje + spent[f]);
   });
@@ -1653,7 +1655,7 @@ function chkAvail(field) {
   if (!dispId) return;
   const disp = findAnyDisp(dispId);
   const bal  = getBalance(disp);
-  const val  = parseFloat(document.getElementById('o_'+field).value)||0;
+  const val  = parseNum(document.getElementById('o_'+field).value);
   document.getElementById('oWarn').textContent =
     val > bal[field]
       ? `⚠️ ${FL[field]}: unosite ${val} m³, raspoloživo samo ${parseFloat(bal[field].toFixed(2))} m³!`
@@ -1668,7 +1670,7 @@ function submitOtprema() {
   if (oDatum > localDateStr()) { showToast('Datum ne može biti u budućnosti!','error'); return; }
   const vals = {};
   let total = 0;
-  FIELDS.forEach(f => { vals[f] = parseFloat(document.getElementById('o_'+f).value)||0; total += vals[f]; });
+  FIELDS.forEach(f => { vals[f] = parseNum(document.getElementById('o_'+f).value); total += vals[f]; });
   if (total===0) { showToast('Unesite barem jednu količinu!','error'); return; }
   const disp    = findAnyDisp(dispId);
   const bal     = getBalance(disp);
@@ -2953,7 +2955,7 @@ async function addBulkPretprodaja() {
 
   const entries = [];
   BPP_MAP.forEach(m => {
-    const qty = parseFloat(document.getElementById(m.id)?.value) || 0;
+    const qty = parseNum(document.getElementById(m.id)?.value);
     if (qty === 0) return;
     const p = {
       id: 'pp' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
@@ -3062,14 +3064,14 @@ async function addPretprodajaEntry() {
     odjel:  (document.getElementById('pp_odjel').value||'').trim(),
     ugovor: (document.getElementById('pp_ugovor').value||'').trim(),
     klasa,
-    tc:  parseFloat(document.getElementById('pp_tc').value)||0,
-    rud: parseFloat(document.getElementById('pp_rud').value)||0,
-    cd:  parseFloat(document.getElementById('pp_cd').value)||0,
-    cc:  parseFloat(document.getElementById('pp_cc').value)||0,
-    tl:  parseFloat(document.getElementById('pp_tl').value)||0,
-    fl:  parseFloat(document.getElementById('pp_fl').value)||0,
-    oc:  parseFloat(document.getElementById('pp_oc').value)||0,
-    od:  parseFloat(document.getElementById('pp_od').value)||0,
+    tc:  parseNum(document.getElementById('pp_tc').value),
+    rud: parseNum(document.getElementById('pp_rud').value),
+    cd:  parseNum(document.getElementById('pp_cd').value),
+    cc:  parseNum(document.getElementById('pp_cc').value),
+    tl:  parseNum(document.getElementById('pp_tl').value),
+    fl:  parseNum(document.getElementById('pp_fl').value),
+    oc:  parseNum(document.getElementById('pp_oc').value),
+    od:  parseNum(document.getElementById('pp_od').value),
   };
   await fbSetPretprodaja(p);
   clearPretprodajaForm();
@@ -3082,7 +3084,7 @@ function editPP(id) {
   const tr = document.getElementById('pp-row-' + id);
   if (!tr) return;
   const inp = (field, val) =>
-    `<input id="ppe_${field}_${id}" type="number" step="0.01" value="${val||''}"
+    `<input id="ppe_${field}_${id}" type="text" inputmode="decimal" value="${val||''}"
       style="width:62px;font-size:12px;padding:2px 4px;background:var(--surface2);color:var(--text);border:1px solid var(--accent);border-radius:4px">`;
   tr.innerHTML = `
     <td style="text-align:left">
@@ -3106,7 +3108,7 @@ function editPP(id) {
 async function savePP(id) {
   const p = pretprodaje.find(pp => pp.id === id);
   if (!p) return;
-  const fld = f => parseFloat(document.getElementById(`ppe_${f}_${id}`)?.value) || 0;
+  const fld = f => parseNum(document.getElementById(`ppe_${f}_${id}`)?.value);
   const updated = {
     ...p,
     klasa: (document.getElementById(`ppe_klasa_${id}`)?.value||'').trim() || p.klasa,
