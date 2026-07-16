@@ -26,6 +26,7 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  runTransaction,
   query,
   orderBy
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
@@ -53,6 +54,7 @@ window._fb = {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  runTransaction,
   query,
   orderBy
 };
@@ -1017,7 +1019,7 @@ async function transferDebtAndCleanup(extraDisp) {
       const dug = r2(-bal[f]);
       if (dug <= 0) continue; // tačno na nuli — nema duga za prijenos
       const target = pool
-        .filter(other => other.id !== d.id && other.kupac === d.kupac && (other[f]||0) > 0 && effBal(other)[f] > dug)
+        .filter(other => other.id !== d.id && kupacMatch(other.kupac, d.kupac) && (other[f]||0) > 0 && effBal(other)[f] > dug)
         .sort((a,b) => (a.datum||'').localeCompare(b.datum||''))[0];
       if (!target) continue; // ne bi se smjelo desiti — isReplaced je već potvrdio da postoji
       const adj = {
@@ -1048,15 +1050,39 @@ async function autoCleanupExhaustedDisps() {
   for (const d of old) await fbDelArchive(d.id);
 }
 
+// Globalni (Firestore transakcijski) lock za dnevni cleanup — sprječava da dva
+// uređaja koja se otvore skoro istovremeno poslije 06:00h oba pokrenu cleanup i
+// duplo prenesu dug prije nego prvo brisanje stigne propagirati svima. Vraća
+// true samo uređaju koji je prvi uspio "zauzeti" današnji datum.
+async function tryClaimCleanupLock(todayStr) {
+  if (!fs || !db) return false;
+  try {
+    return await fs.runTransaction(db, async (tx) => {
+      const ref  = fs.doc(db, 'meta', 'cleanup');
+      const snap = await tx.get(ref);
+      const lastRunDate = snap.exists() ? snap.data().lastRunDate : '';
+      if (lastRunDate === todayStr) return false; // već odrađeno danas (bilo koji uređaj)
+      tx.set(ref, { lastRunDate: todayStr, claimedAt: Date.now() });
+      return true;
+    });
+  } catch (e) {
+    console.warn('Cleanup lock transakcija nije uspjela:', e);
+    return false;
+  }
+}
+
 function scheduleAutoCleanup() {
   const tryCleanup = async () => {
     const now = new Date();
     const todayStr = localDateStr(now);
-    const lastRun  = localStorage.getItem('lastAutoCleanup') || '';
-    if (now.getHours() >= 6 && lastRun !== todayStr) {
-      localStorage.setItem('lastAutoCleanup', todayStr);
-      await autoCleanupExhaustedDisps();
-    }
+    if (now.getHours() < 6) return;
+    // Brzi lokalni izlaz — izbjegava nepotrebnu transakciju ako je OVAJ uređaj
+    // već odradio cleanup danas (transakcija je i dalje krajnja zaštita).
+    if ((localStorage.getItem('lastAutoCleanup') || '') === todayStr) return;
+    const claimed = await tryClaimCleanupLock(todayStr);
+    localStorage.setItem('lastAutoCleanup', todayStr);
+    if (!claimed) return; // drugi uređaj je već zauzeo današnji cleanup
+    await autoCleanupExhaustedDisps();
   };
   tryCleanup();
   setInterval(tryCleanup, 60000);
@@ -1135,7 +1161,12 @@ async function fbDelPrimkaOdjel(id) {
 // ═══════════════════════════════════════════════════════
 //  BALANCE
 // ═══════════════════════════════════════════════════════
-function getBalance(disp) {
+// `cache` (opcionalno) — Map za memoizaciju unutar JEDNOG rendera (npr. renderPregled).
+// Bez cache parametra ponašanje je identično kao prije (svaki poziv računa iznova) —
+// nema rizika od zastarjelih vrijednosti za pozive koji NE prosljeđuju cache
+// (npr. transferDebtAndCleanup s tek izmijenjenom dispozicijom).
+function getBalance(disp, cache) {
+  if (cache && cache.has(disp.id)) return cache.get(disp.id);
   const _today = new Date(); _today.setHours(0,0,0,0);
   const _todayStr = localDateStr(_today);
   const spent = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
@@ -1144,11 +1175,12 @@ function getBalance(disp) {
     .forEach(o => { FIELDS.forEach(f => spent[f] += (o[f]||0)); });
   const bal = {};
   FIELDS.forEach(f => bal[f] = r2((disp[f]||0) - spent[f]));
+  if (cache) cache.set(disp.id, bal);
   return bal;
 }
 
-function balStatus(disp) {
-  const bal = getBalance(disp);
+function balStatus(disp, cache) {
+  const bal = getBalance(disp, cache);
   const total = FIELDS.reduce((s,f) => s + (disp[f]||0), 0);
   const rem   = FIELDS.reduce((s,f) => s + bal[f], 0);
   if (total === 0) return 'empty';
@@ -1165,10 +1197,13 @@ function balStatus(disp) {
 // `pool` (opcionalno) — niz dispozicija za pretragu "druge" dispozicije; default je
 // globalni `dispozicije`. Omogućava provjeru odmah nakon snimanja, prije nego
 // realtime listener osvježi globalni niz (vidi transferDebtAndCleanup).
-function isReplaced(disp, pool = dispozicije) {
+// `cache` (opcionalno, isto kao kod getBalance) — omogućava memoizaciju kad se
+// isReplaced() zove za SVAKU dispoziciju u jednom renderu (npr. renderPregled),
+// bez čega bi svaki poziv iznova računao getBalance() za sve "druge" kandidate.
+function isReplaced(disp, pool = dispozicije, cache) {
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
-  const bal = getBalance(disp);
+  const bal = getBalance(disp, cache);
   // Svi sortimenti moraju biti na nuli ili u minusu
   if (!coveredFields.every(f => bal[f] <= 0)) return false;
   // Za svaki sortiment: kupac mora imati drugu dispoziciju čiji ostatak
@@ -1177,9 +1212,9 @@ function isReplaced(disp, pool = dispozicije) {
     const dug = Math.max(0, -bal[f]); // 0 ako je nula, pozitivno ako je minus
     return pool.some(other =>
       other.id !== disp.id &&
-      other.kupac === disp.kupac &&
+      kupacMatch(other.kupac, disp.kupac) &&
       (other[f]||0) > 0 &&
-      getBalance(other)[f] > dug  // nova mora pokriti dug
+      getBalance(other, cache)[f] > dug  // nova mora pokriti dug
     );
   });
 }
@@ -1188,10 +1223,10 @@ function isReplaced(disp, pool = dispozicije) {
 // pokrivenim poljima (nema duga, nema šta prenositi) — za razliku od
 // isReplaced() koja traži pokriće za MINUS. Nulirana se briše odmah,
 // bez traženja zamjenske dispozicije.
-function isZeroedOut(disp) {
+function isZeroedOut(disp, cache) {
   const coveredFields = FIELDS.filter(f => (disp[f]||0) > 0);
   if (coveredFields.length === 0) return false;
-  const bal = getBalance(disp);
+  const bal = getBalance(disp, cache);
   return coveredFields.every(f => bal[f] === 0);
 }
 
@@ -1240,18 +1275,23 @@ function renderPregled() {
     if (thK) thK.classList.add('sort-asc');
   }
 
+  // Memoizacija balansa unutar OVOG rendera (bal je isti za sve pozive dok se
+  // otpreme/dispozicije ne promijene) — bez ovoga bi isReplaced() za svaku
+  // dispoziciju iznova računao getBalance() za sve "druge" kandidate (O(n²)).
+  const _balCache = new Map();
+
   const grouped = {};
   dispozicije.forEach(d => {
     if (!d.kupac.toLowerCase().includes(search) &&
         !(d.ugovor||'').toLowerCase().includes(search) &&
         !(d.broj||'').toLowerCase().includes(search)) return;
-    const st = balStatus(d);
+    const st = balStatus(d, _balCache);
     if (st === 'empty') return; // bez definiranih kolicina — ignoriraj
     // Sakrij SAMO ako je iscrpljena I postoji druga dispozicija istog kupca
     // za isti sortiment koja pokriva dug (briše se u dnevnom cleanup-u).
     // Ako je ovo JEDINA dispozicija za taj sortiment, isReplaced() vraća
     // false čak i kad je u minusu — ostaje vidljiva ovdje kao 'over'.
-    if (isReplaced(d)) return;
+    if (isReplaced(d, dispozicije, _balCache)) return;
     // 'over' (minus bez zamjene, ili samo jedna dispozicija za sortiment) ostaje u pregledu
     (grouped[d.kupac] = grouped[d.kupac]||[]).push(d);
   });
@@ -1279,12 +1319,12 @@ function renderPregled() {
       kupciKeys.sort((a, b) => sortDir * a.localeCompare(b));
     } else {
       kupciKeys.sort((a, b) => {
-        const aSum = grouped[a].reduce((s, d) => s + (getBalance(d)[sortCol] || 0), 0);
-        const bSum = grouped[b].reduce((s, d) => s + (getBalance(d)[sortCol] || 0), 0);
+        const aSum = grouped[a].reduce((s, d) => s + (getBalance(d, _balCache)[sortCol] || 0), 0);
+        const bSum = grouped[b].reduce((s, d) => s + (getBalance(d, _balCache)[sortCol] || 0), 0);
         return sortDir * (aSum - bSum);
       });
       kupciKeys.forEach(k => {
-        grouped[k].sort((a, b) => sortDir * (getBalance(a)[sortCol] - getBalance(b)[sortCol]));
+        grouped[k].sort((a, b) => sortDir * (getBalance(a, _balCache)[sortCol] - getBalance(b, _balCache)[sortCol]));
       });
     }
     flatRows = kupciKeys.flatMap(k => grouped[k].map(d => ({ kupac: k, disp: d })));
@@ -1296,8 +1336,8 @@ function renderPregled() {
   flatRows.forEach(({kupac, disp: d}) => {
       const isNewGroup = kupac !== prevKupac;
       prevKupac = kupac;
-      const bal    = getBalance(d);
-      const st     = balStatus(d);
+      const bal    = getBalance(d, _balCache);
+      const st     = balStatus(d, _balCache);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
       html += `<tr${isNewGroup ? ' class="kupac-first"' : ''}>
         <td class="kupac">${isNewGroup ? `<span class="kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</span>` : ''}</td>
@@ -1343,8 +1383,8 @@ function renderPregled() {
   // ── Mobile card view ──────────────────────────────────
   let mhtml = '';
   flatRows.forEach(({kupac, disp: d}) => {
-      const bal    = getBalance(d);
-      const st     = balStatus(d);
+      const bal    = getBalance(d, _balCache);
+      const st     = balStatus(d, _balCache);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
       const nonZero = FIELDS.filter(f => d[f]);
       const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('.') + '.' + d.datum.slice(2,4) : '—';
@@ -2192,12 +2232,30 @@ function renderPotrosene() {
         ${d.ugovor ? `<div style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${d.ugovor}</strong></div>` : ''}
         <div style="font-size:12px;color:var(--muted)">Datum: <strong>${dispDat}</strong></div>
         <div style="font-size:11px;color:#7a7aaa;margin-top:5px">🗄 Potrošena: ${exhAt}</div>
+        <button class="edit-disp-btn" style="margin-top:6px" onclick="restoreDisp('${d.id}')" title="Vrati u aktivne dispozicije">↩ Vrati u aktivne</button>
       </div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${amounts||'<span style="color:var(--muted);font-size:13px">—</span>'}</div>
     </div>`;
   });
 
   list.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Potrošene dispozicije u zadnjih 10 dana: <strong>${filtered.length}</strong></div>` + html;
+}
+
+// Vrati arhiviranu (potrošenu) dispoziciju nazad u aktivne. Ako je dug s ove
+// dispozicije već prenesen na drugu (adjustment otprema), upozori — vraćanje
+// ne poništava taj prijenos, samo ponovo prikazuje ovu dispoziciju.
+async function restoreDisp(id) {
+  const d = arhiva.find(a => a.id === id);
+  if (!d) return;
+  const hadDebtTransfer = otpreme.some(o => o.source === 'adjustment' && o.broj === `Prijenos duga (${d.broj || d.id})`);
+  const msg = hadDebtTransfer
+    ? `Vrati dispoziciju "${d.broj||d.id}" u aktivne?\n\n⚠️ Dug s ove dispozicije je već prenesen na drugu (zamjensku) dispoziciju — taj prijenos se NEĆE poništiti. Vraćanje samo ponovo prikazuje ovu dispoziciju.`
+    : `Vrati dispoziciju "${d.broj||d.id}" u aktivne?`;
+  if (!confirm(msg)) return;
+  const { exhaustedAt, ...disp } = d;
+  await fbSetDisp(disp);
+  await fbDelArchive(id);
+  showToast('Dispozicija vraćena u aktivne', 'success');
 }
 
 async function deleteOtp(id) {
@@ -2606,7 +2664,15 @@ async function doSync() {
     updateSyncStatus(now);
     const datesLabel = selectedDates
       .map(d => { const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }).join(', ');
-    showToast(`✅ Sinkronizirano: ${newCount} novih zapisa za ${datesLabel}`, 'success');
+
+    // BUG FIX: sync ranije nije pokretao cleanup — nulirane/iscrpljene dispozicije
+    // nastale ovim sync-om su ostajale vidljive do sljedeće dispozicije ili 06:00h.
+    // Kratka pauza da realtime listener stigne osvježiti lokalni `otpreme` niz
+    // prije nego getBalance() računa salde za cleanup.
+    await sleep(400);
+    const cleaned = await transferDebtAndCleanup();
+    showToast(`✅ Sinkronizirano: ${newCount} novih zapisa za ${datesLabel}` +
+      (cleaned ? ` · 🗄️ Očišćeno ${cleaned} iscrpljenih/nuliranih dispozicija.` : ''), 'success');
 
   } catch(e) {
     console.error(e);

@@ -1,5 +1,12 @@
 # Pregled koda — bugovi i preporuke
 
+> ## ✅ STATUS: SVIH 5 NALAZA RIJEŠENO — 16.07.2026.
+> - **#1** `doSync()` sada poziva `transferDebtAndCleanup()` na kraju (uz kratku pauzu da realtime listener stigne osvježiti `otpreme` prije računanja salda)
+> - **#2** `kupacMatch()` sada korišten dosljedno u `isReplaced()` i u odabiru ciljne dispozicije u `transferDebtAndCleanup()` (ranije strogo `===`, sad isti fuzzy match kao FIFO)
+> - **#3** `getBalance`/`balStatus`/`isReplaced`/`isZeroedOut` dobili opcioni `cache` (Map) parametar — `renderPregled()` ga koristi (O(n²) → O(n+m) unutar jednog rendera); svi ostali pozivi bez cache parametra rade identično kao prije (bez rizika za `transferDebtAndCleanup`)
+> - **#4** Globalni Firestore-transakcijski lock (`meta/cleanup` dokument + `runTransaction`) sprječava da dva uređaja istovremeno pokrenu dnevni cleanup
+> - **#5** Dugme "↩ Vrati u aktivne" u tabu Potrošene dispozicije (`restoreDisp()`) — upozorava ako je dug već prenesen na drugu dispoziciju
+
 **Datum:** 16.07.2026. · **Fajl:** index.html (3251 linija)
 **Obuhvaćeno:** FIFO otprema (ručna + sync), balansi, prijenos duga, cleanup nuliranih/iscrpljenih, render pregleda, brisanje, tab Potrošene dispozicije.
 
