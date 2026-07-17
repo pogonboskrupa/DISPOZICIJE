@@ -727,7 +727,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     </label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);margin-top:8px">
       <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600">Drugi datum:</label>
-      <input type="text" id="syncCustomDate" placeholder="dd.mm.yyyy" maxlength="10"
+      <input type="text" id="syncCustomDate" placeholder="dd/mm/yyyy" maxlength="10"
         style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace;letter-spacing:1px">
     </div>
     <div style="display:flex;gap:10px">
@@ -782,6 +782,16 @@ const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci
 const r2 = x => Math.round(x * 100) / 100;
 // Parsira broj iz unosa dopuštajući i zarez i tačku kao decimalni separator (npr. "30,33" ili "30.33")
 const parseNum = v => parseFloat(String(v ?? '').trim().replace(',', '.')) || 0;
+// Formatiraj Date objekat kao dd/mm/yyyy (eksplicitno, ne oslanja se na toLocaleDateString jer je format ovisan o browseru/ICU podacima)
+const fmtDateObj = date => {
+  const d = (date instanceof Date) ? date : new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+};
+// Isto kao fmtDateObj, uz sat:minut (npr. za vremenske pečate arhiviranja/unosa)
+const fmtDateTimeObj = date => {
+  const d = (date instanceof Date) ? date : new Date();
+  return `${fmtDateObj(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
 
 // Poklapanje imena kupaca: tačno poklapanje uvijek; podstring poklapanje
 // samo kad su OBA imena ≥5 znakova (sprječava da se npr. 'BOR' poklopi
@@ -973,8 +983,7 @@ async function initFirebase() {
   document.getElementById('loader').style.display = 'none';
   document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('mainContent').style.display = 'block';
-  document.getElementById('dateBadge').textContent =
-    new Date().toLocaleDateString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric'});
+  document.getElementById('dateBadge').textContent = fmtDateObj(new Date());
 
   scheduleAutoCleanup();
 }
@@ -1280,7 +1289,7 @@ function renderPregled() {
   const body     = document.getElementById('pregledBody');
   if (!body) return;
   const _d = new Date();
-  const _dn = `${String(_d.getDate()).padStart(2,'0')}.${String(_d.getMonth()+1).padStart(2,'0')}.${_d.getFullYear()}`;
+  const _dn = `${String(_d.getDate()).padStart(2,'0')}/${String(_d.getMonth()+1).padStart(2,'0')}/${_d.getFullYear()}`;
   const _naslov = document.getElementById('pregledNaslov');
   if (_naslov) _naslov.textContent = `PREGLED DISPOZICIJA NA DAN ${_dn}`;
 
@@ -1358,7 +1367,7 @@ function renderPregled() {
       html += `<tr${isNewGroup ? ' class="kupac-first"' : ''}>
         <td class="kupac">${isNewGroup ? `<span class="kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</span>` : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
-        <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
+        <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('/') : '—'}</td>
         <td style="font-size:15px;color:var(--text)">${d.ugovor||''}</td>
         <td style="border-left:2px solid var(--border)">${d.tc  ? fmtBal(bal.tc,  d.tc)  : ''}</td>
         <td>${d.rud ? fmtBal(bal.rud, d.rud) : ''}</td>
@@ -1403,7 +1412,7 @@ function renderPregled() {
       const st     = balStatus(d, _balCache);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
       const nonZero = FIELDS.filter(f => d[f]);
-      const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('.') + '.' + d.datum.slice(2,4) : '—';
+      const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('/') + '/' + d.datum.slice(2,4) : '—';
       mhtml += `<div class="mob-card">
         <div class="mob-head">
           <div class="mob-kupac kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</div>
@@ -1803,7 +1812,7 @@ function showKupacOtpreme(kupac) {
       const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
       const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
       const isPretp  = !!ppEntry || !!(o.odjel && o.klasa);
-      const datFmt   = o.datum ? o.datum.split('-').reverse().join('.') : '—';
+      const datFmt   = o.datum ? o.datum.split('-').reverse().join('/') : '—';
       const vals     = FIELDS.filter(f => o[f] > 0)
         .map(f => `<span style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;white-space:nowrap">${FL[f]}: <strong>${r2(o[f]).toFixed(2)}</strong></span>`).join(' ');
       const srcBadge = o.source === 'sheet'
@@ -1857,7 +1866,7 @@ function clearOtprema() {
 // ═══════════════════════════════════════════════════════
 function openPrintWindow() {
   const today   = new Date();
-  const dateFmt = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}.${today.getFullYear()}`;
+  const dateFmt = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
 
   // ─── Stranica 1: DISPOZICIJE ───────────────────────────
   // Isti filter kao u pregledu: sakrij empty i iscrpljene+zamijenjene
@@ -1882,7 +1891,7 @@ function openPrintWindow() {
     const rows = grouped[kupac];
     rows.forEach((d, i) => {
       const bal  = getBalance(d);
-      const dat  = d.datum ? d.datum.split('-').reverse().join('.') : '';
+      const dat  = d.datum ? d.datum.split('-').reverse().join('/') : '';
       const cls  = balStatus(d);
       const rowStyle = cls === 'over'
         ? 'background:#fff0f0'
@@ -2126,7 +2135,7 @@ function renderHistorija() {
   last10.forEach(dateStr => {
     const dayOtpreme = byDate[dateStr] || [];
     const [y, m, day] = dateStr.split('-');
-    const label = `${day}.${m}.${y}`;
+    const label = `${day}/${m}/${y}`;
     const isToday = dateStr === localDateStr(today);
 
     // Dnevne sume oduzimanja
@@ -2231,9 +2240,9 @@ function renderPotrosene() {
 
   let html = '';
   filtered.forEach(d => {
-    const dispDat = d.datum ? d.datum.split('-').reverse().join('.') : '—';
+    const dispDat = d.datum ? d.datum.split('-').reverse().join('/') : '—';
     const exhAt   = d.exhaustedAt
-      ? new Date(d.exhaustedAt).toLocaleString('bs-BA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      ? fmtDateTimeObj(new Date(d.exhaustedAt))
       : '—';
     const amounts = FIELDS.filter(f => d[f] !== 0).map(f =>
       `<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${(d[f]||0).toFixed(2)} m³</div></div>`
@@ -2380,7 +2389,7 @@ async function syncSheet() {
     const list = document.getElementById('syncDateList');
     list.innerHTML = last5.map(d => {
       const [y, m, day] = d.split('-');
-      const label = `${day}.${m}.${y}`;
+      const label = `${day}/${m}/${y}`;
       const count = dateCountMap[d] || 0;
       const isToday = d === todayStr;
       const alreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === d);
@@ -2405,7 +2414,7 @@ async function syncSheet() {
     const todayAlreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === todayStr);
     const todayCount = dateCountMap[todayStr] || 0;
     const [ty, tm, tday] = todayStr.split('-');
-    document.getElementById('syncTodayDate').textContent = `${tday}.${tm}.${ty}`;
+    document.getElementById('syncTodayDate').textContent = `${tday}/${tm}/${ty}`;
     document.getElementById('syncTodayCheck').checked = false;
     const todayOtp = otpreme.filter(o => o.datum === todayStr);
     const todayOtpCount = todayOtp.length;
@@ -2456,7 +2465,7 @@ async function doSync() {
   }
   const customRaw = document.getElementById('syncCustomDate').value.trim();
   if (customRaw) {
-    const cm = customRaw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    const cm = customRaw.match(/^(\d{2})[./](\d{2})[./](\d{4})$/);
     if (cm) {
       const customISO = `${cm[3]}-${cm[2]}-${cm[1]}`;
       if (customISO <= todayStr) {
@@ -2466,7 +2475,7 @@ async function doSync() {
         return;
       }
     } else {
-      showToast('Unesite datum u formatu dd.mm.yyyy', 'error');
+      showToast('Unesite datum u formatu dd/mm/yyyy', 'error');
       return;
     }
   }
@@ -2677,7 +2686,7 @@ async function doSync() {
     await fbSetMeta('sync', { lastSync: now });
     updateSyncStatus(now);
     const datesLabel = selectedDates
-      .map(d => { const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }).join(', ');
+      .map(d => { const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }).join(', ');
 
     // BUG FIX: sync ranije nije pokretao cleanup — nulirane/iscrpljene dispozicije
     // nastale ovim sync-om su ostajale vidljive do sljedeće dispozicije ili 06:00h.
@@ -2705,7 +2714,7 @@ function updateSyncStatus(iso) {
   if (!iso) return;
   const d = new Date(iso);
   document.getElementById('syncStatus').textContent =
-    `Sinkr: ${d.toLocaleDateString('bs-BA')} ${d.toLocaleTimeString('bs-BA',{hour:'2-digit',minute:'2-digit'})}`;
+    `Sinkr: ${fmtDateObj(d)} ${d.toLocaleTimeString('bs-BA',{hour:'2-digit',minute:'2-digit'})}`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2834,7 +2843,7 @@ function renderPretprodaja() {
     const r0 = rows[0];
     const sviBrojevi = [...new Set(rows.map(p => p.broj).filter(Boolean))];
     const najNovijDatum = rows.map(p => p.datum).filter(Boolean).sort().at(-1);
-    const datFmt = najNovijDatum ? najNovijDatum.split('-').reverse().join('.') : '—';
+    const datFmt = najNovijDatum ? najNovijDatum.split('-').reverse().join('/') : '—';
 
     // Totali po grupama
     const totOrig = {}; const totBal = {};
@@ -3186,8 +3195,8 @@ function renderHistDisp() {
   filtered.forEach(d => {
     const bal      = getBalance(d);
     const ts       = getCreatedTs(d);
-    const uneseno  = ts ? new Date(ts).toLocaleString('bs-BA', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    const dispDat  = d.datum ? d.datum.split('-').reverse().join('.') : '—';
+    const uneseno  = ts ? fmtDateTimeObj(new Date(ts)) : '—';
+    const dispDat  = d.datum ? d.datum.split('-').reverse().join('/') : '—';
     const oCount   = otpreme.filter(o => o.disp_id === d.id).length;
     const total    = FIELDS.reduce((s,f) => s + (d[f]||0), 0);
     const remain   = FIELDS.reduce((s,f) => s + bal[f], 0);
