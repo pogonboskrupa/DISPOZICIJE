@@ -389,7 +389,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Datum</label>
-          <input type="date" id="n_datum">
+          <input type="text" id="n_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)">
         </div>
         <div class="form-group" style="grid-column:span 2">
           <label>Ugovor</label>
@@ -443,7 +443,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Datum</label>
-          <input type="date" id="bpp_datum">
+          <input type="text" id="bpp_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)">
         </div>
         <div class="form-group">
           <label>Odjel *</label>
@@ -504,7 +504,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Datum</label>
-          <input type="date" id="pp_datum">
+          <input type="text" id="pp_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)">
         </div>
         <div class="form-group">
           <label>Odjel</label>
@@ -577,7 +577,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Datum otpreme *</label>
-          <input type="date" id="o_datum" onchange="checkPPOnDate()">
+          <input type="text" id="o_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)" onchange="checkPPOnDate()">
           <div id="ppDateInfo" style="margin-top:6px;display:none;padding:7px 11px;background:#2a1a38;border:1px solid #7a3aaa;border-radius:6px;color:#c47af0;font-size:12px;font-weight:600">🏷 Ima otprema za Pretprodaju</div>
         </div>
         <div class="form-group">
@@ -682,7 +682,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
       </div>
       <div class="form-group">
         <label>Datum</label>
-        <input type="date" id="e_datum">
+        <input type="text" id="e_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)">
       </div>
       <div class="form-group" style="grid-column:span 2">
         <label>Ugovor</label>
@@ -727,7 +727,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     </label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);margin-top:8px">
       <label style="font-size:13px;color:var(--muted);white-space:nowrap;font-weight:600">Drugi datum:</label>
-      <input type="text" id="syncCustomDate" placeholder="dd/mm/yyyy" maxlength="10"
+      <input type="text" id="syncCustomDate" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)"
         style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace;letter-spacing:1px">
     </div>
     <div style="display:flex;gap:10px">
@@ -782,11 +782,39 @@ const FL = {tc:'Trupci Č',rud:'Rudno/RD',cd:'Cel.Duga',cc:'Cel.Cij.',tl:'Trupci
 const r2 = x => Math.round(x * 100) / 100;
 // Parsira broj iz unosa dopuštajući i zarez i tačku kao decimalni separator (npr. "30,33" ili "30.33")
 const parseNum = v => parseFloat(String(v ?? '').trim().replace(',', '.')) || 0;
-// Formatiraj Date objekat kao dd/mm/yyyy (eksplicitno, ne oslanja se na toLocaleDateString jer je format ovisan o browseru/ICU podacima)
+// Formatiraj Date objekat kao dd.mm.yyyy (eksplicitno, ne oslanja se na toLocaleDateString jer je format ovisan o browseru/ICU podacima)
 const fmtDateObj = date => {
   const d = (date instanceof Date) ? date : new Date();
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
 };
+// Konvertuje ISO 'YYYY-MM-DD' u prikaz 'dd.mm.yyyy'
+const isoToDots = iso => {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+};
+// Konvertuje uneseni tekst 'dd.mm.yyyy' (ili 'dd/mm/yyyy') nazad u ISO 'YYYY-MM-DD'; vraća '' ako format nije prepoznat
+const dotsToIso = str => {
+  const m = String(str||'').trim().match(/^(\d{2})[.\/](\d{2})[.\/](\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+// Postavi vrijednost datumskog text-polja iz ISO stringa
+function setDateField(id, iso) {
+  const el = document.getElementById(id);
+  if (el) el.value = isoToDots(iso);
+}
+// Pročitaj ISO 'YYYY-MM-DD' vrijednost iz datumskog text-polja (dd.mm.yyyy prikaz)
+function getDateField(id) {
+  return dotsToIso(document.getElementById(id)?.value);
+}
+// Dok korisnik kuca cifre u datumsko polje, automatski umeće tačke: 16072026 → 16.07.2026
+function maskDateInput(el) {
+  const digits = el.value.replace(/\D/g, '').slice(0, 8);
+  let out = digits;
+  if (digits.length > 4) out = digits.slice(0,2) + '.' + digits.slice(2,4) + '.' + digits.slice(4);
+  else if (digits.length > 2) out = digits.slice(0,2) + '.' + digits.slice(2);
+  el.value = out;
+}
 // Isto kao fmtDateObj, uz sat:minut (npr. za vremenske pečate arhiviranja/unosa)
 const fmtDateTimeObj = date => {
   const d = (date instanceof Date) ? date : new Date();
@@ -1289,7 +1317,7 @@ function renderPregled() {
   const body     = document.getElementById('pregledBody');
   if (!body) return;
   const _d = new Date();
-  const _dn = `${String(_d.getDate()).padStart(2,'0')}/${String(_d.getMonth()+1).padStart(2,'0')}/${_d.getFullYear()}`;
+  const _dn = `${String(_d.getDate()).padStart(2,'0')}.${String(_d.getMonth()+1).padStart(2,'0')}.${_d.getFullYear()}`;
   const _naslov = document.getElementById('pregledNaslov');
   if (_naslov) _naslov.textContent = `PREGLED DISPOZICIJA NA DAN ${_dn}`;
 
@@ -1367,7 +1395,7 @@ function renderPregled() {
       html += `<tr${isNewGroup ? ' class="kupac-first"' : ''}>
         <td class="kupac">${isNewGroup ? `<span class="kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</span>` : ''}</td>
         <td style="font-size:15px">${d.broj}</td>
-        <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('/') : '—'}</td>
+        <td style="font-size:15px;${datumColor(d.datum)}">${d.datum ? d.datum.slice(5).split('-').reverse().join('.') : '—'}</td>
         <td style="font-size:15px;color:var(--text)">${d.ugovor||''}</td>
         <td style="border-left:2px solid var(--border)">${d.tc  ? fmtBal(bal.tc,  d.tc)  : ''}</td>
         <td>${d.rud ? fmtBal(bal.rud, d.rud) : ''}</td>
@@ -1412,7 +1440,7 @@ function renderPregled() {
       const st     = balStatus(d, _balCache);
       const oCount = otpreme.filter(o => o.disp_id === d.id).length;
       const nonZero = FIELDS.filter(f => d[f]);
-      const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('/') + '/' + d.datum.slice(2,4) : '—';
+      const datFmt  = d.datum ? d.datum.slice(5).split('-').reverse().join('.') + '.' + d.datum.slice(2,4) : '—';
       mhtml += `<div class="mob-card">
         <div class="mob-head">
           <div class="mob-kupac kupac-link" onclick="showKupacOtpreme('${kupac.replace(/'/g,"\\'")}')" title="Prikaži zadnje otpreme (30 dana)">${kupac}</div>
@@ -1486,7 +1514,7 @@ function renderNova() {
     sel.innerHTML = '<option value="">— Odaberi kupca —</option>' +
       src.map(k=>`<option value="${k}">${k}</option>`).join('');
   }
-  document.getElementById('n_datum').value = localDateStr();
+  setDateField('n_datum', localDateStr());
 }
 
 async function addDispozicija() {
@@ -1497,7 +1525,7 @@ async function addDispozicija() {
     id: 'd' + Date.now(),
     createdAt: new Date().toISOString(),
     kupac, broj,
-    datum:  document.getElementById('n_datum').value,
+    datum:  getDateField('n_datum'),
     ugovor: document.getElementById('n_ugovor').value.trim(),
     tc:  parseNum(document.getElementById('n_tc').value),
     rud: parseNum(document.getElementById('n_rud').value),
@@ -1520,7 +1548,7 @@ async function addDispozicija() {
 function clearNovaForm() {
   ['n_kupac','n_broj','n_ugovor','n_tc','n_rud','n_cd','n_cc','n_tl','n_fl','n_oc','n_od']
     .forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('n_datum').value = localDateStr();
+  setDateField('n_datum', localDateStr());
 }
 
 async function deleteDisp(id) {
@@ -1546,7 +1574,7 @@ function editDisp(id) {
   document.getElementById('e_id').value    = d.id;
   sel.value = d.kupac || '';
   document.getElementById('e_broj').value  = d.broj  || '';
-  document.getElementById('e_datum').value = d.datum || '';
+  setDateField('e_datum', d.datum || '');
   document.getElementById('e_ugovor').value= d.ugovor|| '';
 
   // Polja prikazuju TRENUTNO STANJE (bal), ne upisanu/originalnu količinu —
@@ -1577,7 +1605,7 @@ async function saveDisp() {
 
   const d = {
     id, kupac, broj,
-    datum:  document.getElementById('e_datum').value,
+    datum:  getDateField('e_datum'),
     ugovor: document.getElementById('e_ugovor').value.trim(),
   };
   let manualDebt = false;
@@ -1617,7 +1645,7 @@ function renderOtprema() {
   if (!oDatumEl.value) {
     const d = new Date();
     if (d.getDay() === 0) d.setDate(d.getDate() - 2); // nedjelja → petak
-    oDatumEl.value = localDateStr(d);
+    setDateField('o_datum', localDateStr(d));
   }
 }
 
@@ -1675,7 +1703,8 @@ function submitOtprema() {
   const kupac  = document.getElementById('o_kupac').value;
   const dispId = document.getElementById('o_disp').value;
   if (!kupac||!dispId) { showToast('Odaberite kupca i dispoziciju!','error'); return; }
-  const oDatum = document.getElementById('o_datum').value;
+  const oDatum = getDateField('o_datum');
+  if (!oDatum) { showToast('Unesite datum u formatu dd.mm.yyyy','error'); return; }
   if (oDatum > localDateStr()) { showToast('Datum ne može biti u budućnosti!','error'); return; }
   const vals = {};
   let total = 0;
@@ -1689,14 +1718,14 @@ function submitOtprema() {
     `<strong>Kupac:</strong> ${kupac}<br>
      <strong>Dispozicija:</strong> ${disp.broj}<br>
      <strong>Otpremnica:</strong> ${document.getElementById('o_broj').value||'—'}<br>
-     <strong>Datum:</strong> ${oDatum}<br><br>
+     <strong>Datum:</strong> ${isoToDots(oDatum)}<br><br>
      <strong>Količine:</strong><br>
      ${FIELDS.filter(f=>vals[f]>0).map(f=>`${FL[f]}: <strong>${vals[f]} m³</strong>`).join('<br>')}
      ${overages.length ? `<br><br><span style="color:var(--red)">⚠️ Prekoračenje: ${overages.map(f=>FL[f]).join(', ')}</span>` : ''}
      ${!isPPsel ? `<br><br><span style="color:var(--muted);font-size:12px">ℹ️ Količine se automatski raspoređuju po dispozicijama kupca od najstarije (FIFO).</span>` : ''}`;
   pendingOtp = {
     kupac, disp_id:dispId, ...vals,
-    datum: document.getElementById('o_datum').value,
+    datum: oDatum,
     broj:  document.getElementById('o_broj').value,
     source:'manual'
   };
@@ -1812,7 +1841,7 @@ function showKupacOtpreme(kupac) {
       const ppEntry  = pretprodaje.find(p => p.id === o.disp_id);
       const disp     = ppEntry ? null : dispozicije.find(d => d.id === o.disp_id);
       const isPretp  = !!ppEntry || !!(o.odjel && o.klasa);
-      const datFmt   = o.datum ? o.datum.split('-').reverse().join('/') : '—';
+      const datFmt   = o.datum ? o.datum.split('-').reverse().join('.') : '—';
       const vals     = FIELDS.filter(f => o[f] > 0)
         .map(f => `<span style="font-size:12px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;white-space:nowrap">${FL[f]}: <strong>${r2(o[f]).toFixed(2)}</strong></span>`).join(' ');
       const srcBadge = o.source === 'sheet'
@@ -1837,7 +1866,7 @@ function showKupacOtpreme(kupac) {
 }
 
 function checkPPOnDate() {
-  const datum = document.getElementById('o_datum').value;
+  const datum = getDateField('o_datum');
   const el    = document.getElementById('ppDateInfo');
   if (!datum || !el) return;
   const hasPP = otpreme.some(o =>
@@ -1852,7 +1881,7 @@ function clearOtprema() {
   document.getElementById('o_disp').innerHTML = '<option value="">— Odaberi dispoziciju —</option>';
   document.getElementById('o_broj').value = '';
   const _cd = new Date(); if (_cd.getDay() === 0) _cd.setDate(_cd.getDate() - 2);
-  document.getElementById('o_datum').value = localDateStr(_cd);
+  setDateField('o_datum', localDateStr(_cd));
   FIELDS.forEach(f => document.getElementById('o_'+f).value = '');
   document.getElementById('availWrap').style.display = 'none';
   document.getElementById('oWarn').textContent = '';
@@ -1866,7 +1895,7 @@ function clearOtprema() {
 // ═══════════════════════════════════════════════════════
 function openPrintWindow() {
   const today   = new Date();
-  const dateFmt = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+  const dateFmt = `${String(today.getDate()).padStart(2,'0')}.${String(today.getMonth()+1).padStart(2,'0')}.${today.getFullYear()}`;
 
   // ─── Stranica 1: DISPOZICIJE ───────────────────────────
   // Isti filter kao u pregledu: sakrij empty i iscrpljene+zamijenjene
@@ -1891,7 +1920,7 @@ function openPrintWindow() {
     const rows = grouped[kupac];
     rows.forEach((d, i) => {
       const bal  = getBalance(d);
-      const dat  = d.datum ? d.datum.split('-').reverse().join('/') : '';
+      const dat  = d.datum ? d.datum.split('-').reverse().join('.') : '';
       const cls  = balStatus(d);
       const rowStyle = cls === 'over'
         ? 'background:#fff0f0'
@@ -2135,7 +2164,7 @@ function renderHistorija() {
   last10.forEach(dateStr => {
     const dayOtpreme = byDate[dateStr] || [];
     const [y, m, day] = dateStr.split('-');
-    const label = `${day}/${m}/${y}`;
+    const label = `${day}.${m}.${y}`;
     const isToday = dateStr === localDateStr(today);
 
     // Dnevne sume oduzimanja
@@ -2240,7 +2269,7 @@ function renderPotrosene() {
 
   let html = '';
   filtered.forEach(d => {
-    const dispDat = d.datum ? d.datum.split('-').reverse().join('/') : '—';
+    const dispDat = d.datum ? d.datum.split('-').reverse().join('.') : '—';
     const exhAt   = d.exhaustedAt
       ? fmtDateTimeObj(new Date(d.exhaustedAt))
       : '—';
@@ -2389,7 +2418,7 @@ async function syncSheet() {
     const list = document.getElementById('syncDateList');
     list.innerHTML = last5.map(d => {
       const [y, m, day] = d.split('-');
-      const label = `${day}/${m}/${y}`;
+      const label = `${day}.${m}.${y}`;
       const count = dateCountMap[d] || 0;
       const isToday = d === todayStr;
       const alreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === d);
@@ -2414,7 +2443,7 @@ async function syncSheet() {
     const todayAlreadyDone = otpreme.some(o => o.source === 'sheet' && o.datum === todayStr);
     const todayCount = dateCountMap[todayStr] || 0;
     const [ty, tm, tday] = todayStr.split('-');
-    document.getElementById('syncTodayDate').textContent = `${tday}/${tm}/${ty}`;
+    document.getElementById('syncTodayDate').textContent = `${tday}.${tm}.${ty}`;
     document.getElementById('syncTodayCheck').checked = false;
     const todayOtp = otpreme.filter(o => o.datum === todayStr);
     const todayOtpCount = todayOtp.length;
@@ -2475,7 +2504,7 @@ async function doSync() {
         return;
       }
     } else {
-      showToast('Unesite datum u formatu dd/mm/yyyy', 'error');
+      showToast('Unesite datum u formatu dd.mm.yyyy', 'error');
       return;
     }
   }
@@ -2686,7 +2715,7 @@ async function doSync() {
     await fbSetMeta('sync', { lastSync: now });
     updateSyncStatus(now);
     const datesLabel = selectedDates
-      .map(d => { const [y,m,dd]=d.split('-'); return `${dd}/${m}/${y}`; }).join(', ');
+      .map(d => { const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }).join(', ');
 
     // BUG FIX: sync ranije nije pokretao cleanup — nulirane/iscrpljene dispozicije
     // nastale ovim sync-om su ostajale vidljive do sljedeće dispozicije ili 06:00h.
@@ -2843,7 +2872,7 @@ function renderPretprodaja() {
     const r0 = rows[0];
     const sviBrojevi = [...new Set(rows.map(p => p.broj).filter(Boolean))];
     const najNovijDatum = rows.map(p => p.datum).filter(Boolean).sort().at(-1);
-    const datFmt = najNovijDatum ? najNovijDatum.split('-').reverse().join('/') : '—';
+    const datFmt = najNovijDatum ? najNovijDatum.split('-').reverse().join('.') : '—';
 
     // Totali po grupama
     const totOrig = {}; const totBal = {};
@@ -2970,7 +2999,7 @@ async function addBulkPretprodaja() {
       id: 'pp' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       createdAt: new Date().toISOString(),
       kupac, odjel, broj,
-      datum:  document.getElementById('bpp_datum').value,
+      datum:  getDateField('bpp_datum'),
       ugovor: (document.getElementById('bpp_ugovor').value||'').trim(),
       klasa:  m.klasa,
       tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
@@ -2992,7 +3021,7 @@ function clearBulkPPForm() {
    'bpp_FL','bpp_I','bpp_II','bpp_III','bpp_RUDNO','bpp_CELD','bpp_CELC','bpp_SKART',
    'bpp_FLL','bpp_IL','bpp_IIL','bpp_IIIL','bpp_OD','bpp_OC']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('bpp_datum').value = localDateStr();
+  setDateField('bpp_datum', localDateStr());
 }
 
 // Izvlači Google Sheet ID iz punog linka ili prihvata direktno zalijepljen ID
@@ -3069,7 +3098,7 @@ async function addPretprodajaEntry() {
     createdAt: new Date().toISOString(),
     kupac,
     broj:   (document.getElementById('pp_broj').value||'').trim(),
-    datum:  document.getElementById('pp_datum').value,
+    datum:  getDateField('pp_datum'),
     odjel:  (document.getElementById('pp_odjel').value||'').trim(),
     ugovor: (document.getElementById('pp_ugovor').value||'').trim(),
     klasa,
@@ -3158,7 +3187,7 @@ async function deleteWholeOdjel() {
 function clearPretprodajaForm() {
   ['pp_kupac','pp_broj','pp_odjel','pp_ugovor','pp_klasa','pp_tc','pp_rud','pp_cd','pp_cc','pp_tl','pp_fl','pp_oc','pp_od']
     .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
-  document.getElementById('pp_datum').value = localDateStr();
+  setDateField('pp_datum', localDateStr());
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3196,7 +3225,7 @@ function renderHistDisp() {
     const bal      = getBalance(d);
     const ts       = getCreatedTs(d);
     const uneseno  = ts ? fmtDateTimeObj(new Date(ts)) : '—';
-    const dispDat  = d.datum ? d.datum.split('-').reverse().join('/') : '—';
+    const dispDat  = d.datum ? d.datum.split('-').reverse().join('.') : '—';
     const oCount   = otpreme.filter(o => o.disp_id === d.id).length;
     const total    = FIELDS.reduce((s,f) => s + (d[f]||0), 0);
     const remain   = FIELDS.reduce((s,f) => s + bal[f], 0);
@@ -3258,9 +3287,9 @@ function switchTab(t) {
     renderPretprodaja();
     // Inicijaliziraj datume ako su prazni
     const ppd = document.getElementById('pp_datum');
-    if (ppd && !ppd.value) ppd.value = localDateStr();
+    if (ppd && !ppd.value) setDateField('pp_datum', localDateStr());
     const bppd = document.getElementById('bpp_datum');
-    if (bppd && !bppd.value) bppd.value = localDateStr();
+    if (bppd && !bppd.value) setDateField('bpp_datum', localDateStr());
   }
   if(t==='otprema')     renderOtprema();
   if(t==='hist-disp')   renderHistDisp();
