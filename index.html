@@ -447,7 +447,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Odjel *</label>
-          <input type="text" id="bpp_odjel" list="bpp_odjel_list" placeholder="Odaberi ili upiši odjel">
+          <input type="text" id="bpp_odjel" list="bpp_odjel_list" placeholder="Odaberi ili upiši odjel" onchange="suggestKupacForOdjel('bpp_odjel','bpp_kupac')">
           <datalist id="bpp_odjel_list"></datalist>
         </div>
         <div class="form-group">
@@ -508,7 +508,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
         </div>
         <div class="form-group">
           <label>Odjel</label>
-          <input type="text" id="pp_odjel" list="pp_odjel_list" placeholder="Odaberi ili upiši odjel">
+          <input type="text" id="pp_odjel" list="pp_odjel_list" placeholder="Odaberi ili upiši odjel" onchange="suggestKupacForOdjel('pp_odjel','pp_kupac')">
           <datalist id="pp_odjel_list"></datalist>
         </div>
         <div class="form-group">
@@ -2771,6 +2771,24 @@ function exportCSV() {
 // ═══════════════════════════════════════════════════════
 //  PRETPRODAJA
 // ═══════════════════════════════════════════════════════
+// Kad se u polju Odjel odabere/upiše odjel koji već ima postojeći unos u
+// Pretprodaji, automatski popuni polje Kupac kupcem koji je taj odjel već
+// kupio — jedan odjel obično pripada jednom kupcu koji je otkupio cijelu
+// projektovanu drvnu masu tog odjela (npr. RISOVAC KRUPA 71 → HUSETIĆ).
+function suggestKupacForOdjel(odjelInputId, kupacInputId) {
+  const odjelEl = document.getElementById(odjelInputId);
+  const kupacEl = document.getElementById(kupacInputId);
+  if (!odjelEl || !kupacEl) return;
+  const odjel = (odjelEl.value || '').trim();
+  if (!odjel) return;
+  const match = pretprodaje.find(p => (p.odjel||'').trim().toLowerCase() === odjel.toLowerCase());
+  if (!match) return;
+  if (kupacEl.value.trim().toLowerCase() !== match.kupac.toLowerCase()) {
+    kupacEl.value = match.kupac;
+    showToast(`ℹ️ Odjel "${odjel}" pripada kupcu "${match.kupac}" — polje Kupac automatski popunjeno.`, 'success');
+  }
+}
+
 // Grupiraj pretprodaju po (kupac|odjel) — zajednička logika za render i za edit ugovora/broja
 function getPPGroups() {
   const grouped = {};
