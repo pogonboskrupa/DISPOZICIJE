@@ -334,6 +334,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <button class="tab" onclick="switchTab('hist-disp')">📁 Historija dispozicija</button>
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
     <button class="tab" onclick="switchTab('potrosene')">🗄 Potrošene dispozicije</button>
+    <button class="tab" onclick="switchTab('raspored')">🚚 Raspored</button>
   </div>
 
   <!-- PREGLED -->
@@ -636,6 +637,39 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <div id="potroseneList"></div>
   </div>
 
+  <!-- RASPORED -->
+  <div id="tab-raspored" class="panel">
+    <h2 style="margin-bottom:16px">🚚 Raspored kamiona</h2>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap">
+      <label style="font-weight:600;font-size:14px">Datum otpreme:</label>
+      <input type="text" id="rasp_datum" placeholder="dd.mm.yyyy" maxlength="10" inputmode="numeric" oninput="maskDateInput(this)" onchange="renderRaspored()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:14px">
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      🏷 Ako je odjel u Pretprodaji, kupac se automatski zaključa na kupca koji je otkupio cijeli taj odjel.
+    </p>
+    <div style="overflow-x:auto">
+      <table class="disp-table" style="width:100%;min-width:760px">
+        <thead>
+          <tr>
+            <th style="width:150px">Odjel</th>
+            <th style="width:120px">Sortiment</th>
+            <th style="width:180px">Kupac</th>
+            <th style="width:230px">Dispozicija / Pretprodaja (stanje)</th>
+            <th style="width:170px">Auto-prijedlog</th>
+            <th style="width:40px"></th>
+          </tr>
+        </thead>
+        <tbody id="raspTbody"></tbody>
+      </table>
+    </div>
+    <datalist id="rasp_odjel_list"></datalist>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="addRasporedRow()">+ Dodaj kamion</button>
+      <button class="btn btn-ghost" onclick="printRaspored()">🖨 Štampaj za poslovođe</button>
+      <button class="btn btn-ghost" onclick="copyRaspored()">📋 Kopiraj za poruku</button>
+    </div>
+  </div>
+
 </main>
 
 <!-- CONFIRM MODAL -->
@@ -765,6 +799,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="potrosene" onclick="switchTab('potrosene')">
     <span class="mni">🗄</span><span class="mnl">Potroš.</span>
   </button>
+  <button class="mnav-btn" data-tab="raspored" onclick="switchTab('raspored')">
+    <span class="mni">🚚</span><span class="mnl">Raspored</span>
+  </button>
   <button class="mnav-btn" id="installBtn" onclick="pwaInstall()">
     <span class="mni">📲</span><span class="mnl">Instaliraj</span>
   </button>
@@ -871,11 +908,12 @@ let pretprodaje  = [];
 let arhiva       = [];
 let kupacList    = [];
 let primkaOdjeli = [];
+let rasporedRows = [];
 let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
-const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','potrosene'];
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','potrosene','raspored'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -997,6 +1035,12 @@ async function initFirebase() {
   fs.onSnapshot(fs.collection(db, 'primka_odjeli'), snap => {
     primkaOdjeli = snap.docs.map(d => ({id: d.id, ...d.data()}));
     primkaOdjeli.sort((a,b) => (a.odjel||'').localeCompare(b.odjel||''));
+  });
+
+  fs.onSnapshot(fs.collection(db, 'raspored'), snap => {
+    rasporedRows = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    rasporedRows.sort((a,b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+    if (document.querySelector('#tab-raspored.active')) renderRaspored();
   });
 
   // ── meta: last sync time ──────────────────────────────
@@ -1195,6 +1239,14 @@ async function fbSetPrimkaOdjel(p) {
 async function fbDelPrimkaOdjel(id) {
   if (!fs||!db) return;
   await fs.deleteDoc(fs.doc(db, 'primka_odjeli', id));
+}
+async function fbSetRasp(r) {
+  if (!fs||!db) return;
+  await fs.setDoc(fs.doc(db, 'raspored', r.id), r);
+}
+async function fbDelRasp(id) {
+  if (!fs||!db) return;
+  await fs.deleteDoc(fs.doc(db, 'raspored', id));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3313,6 +3365,7 @@ function switchTab(t) {
   if(t==='hist-disp')   renderHistDisp();
   if(t==='historija')   renderHistorija();
   if(t==='potrosene')   renderPotrosene();
+  if(t==='raspored')    renderRaspored();
 }
 
 function renderAll() {
@@ -3325,6 +3378,304 @@ function renderAll() {
   if (names[idx]==='hist-disp')   renderHistDisp();
   if (names[idx]==='historija')   renderHistorija();
   if (names[idx]==='potrosene')   renderPotrosene();
+  if (names[idx]==='raspored')    renderRaspored();
+}
+
+// ═══════════════════════════════════════════════════════
+//  RASPORED
+// ═══════════════════════════════════════════════════════
+
+// Najstarija REGULARNA dispozicija (bilo kojeg kupca) s ≥20m³ za sortiment —
+// koristi se samo za odjele koji NISU u Pretprodaji (tamo je kupac već poznat).
+function autoSuggest(sortimentField) {
+  if (!sortimentField) return null;
+  const candidates = dispozicije
+    .filter(d => !isReplaced(d) && getBalance(d)[sortimentField] >= 20)
+    .sort((a, b) => (a.datum||'').localeCompare(b.datum||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  return candidates[0] || null;
+}
+
+// Najstarija dispozicija odabranog kupca s pozitivnim stanjem za sortiment (FIFO — nju otprema prazni)
+function raspDispInfo(kupac, sortimentField) {
+  if (!kupac || !sortimentField) return null;
+  const ku = kupac.toUpperCase().trim();
+  const candidates = dispozicije
+    .filter(d => (d.kupac||'').toUpperCase().trim() === ku && getBalance(d)[sortimentField] > 0)
+    .sort((a, b) => (a.datum||'').localeCompare(b.datum||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  const disp = candidates[0];
+  if (!disp) return null;
+  return { disp, bal: getBalance(disp)[sortimentField] };
+}
+
+// Kupac koji je otkupio cijeli odjel preko Pretprodaje (case-insensitive), ili null
+// ako odjel nije u Pretprodaji — tada se kupac za raspored bira ručno kao i ranije.
+function ppKupacForOdjel(odjel) {
+  if (!odjel) return null;
+  const match = pretprodaje.find(p => (p.odjel||'').trim().toLowerCase() === odjel.trim().toLowerCase());
+  return match ? match.kupac : null;
+}
+
+// Agregirano PP stanje za odjel+sortiment (sve klasa-redove tog odjela koje pišu u to polje)
+function ppOdjelInfo(odjel, sortimentField) {
+  if (!odjel || !sortimentField) return null;
+  const entries = pretprodaje.filter(p =>
+    (p.odjel||'').trim().toLowerCase() === odjel.trim().toLowerCase() && (p[sortimentField]||0) > 0
+  );
+  if (!entries.length) return null;
+  let bal = 0;
+  entries.forEach(p => { bal += getBalance(p)[sortimentField]; });
+  return {
+    kupac: entries[0].kupac,
+    bal: r2(bal),
+    broj: [...new Set(entries.map(e => e.broj).filter(Boolean))].join(' · '),
+    ugovor: entries[0].ugovor,
+    klase: [...new Set(entries.map(e => e.klasa).filter(Boolean))].join(', '),
+  };
+}
+
+function renderRaspored() {
+  const datInput = document.getElementById('rasp_datum');
+  if (datInput && !datInput.value) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDay() === 0) tomorrow.setDate(tomorrow.getDate() + 1);
+    setDateField('rasp_datum', localDateStr(tomorrow));
+  }
+  const datum = getDateField('rasp_datum');
+
+  // Datalist: odjeli iz historije rasporeda + SVI Pretprodaja odjeli (da se lako odabere)
+  const allOdjeli = [...new Set([
+    ...rasporedRows.map(r => r.odjel),
+    ...pretprodaje.map(p => p.odjel),
+  ].filter(Boolean))].sort();
+  const dlEl = document.getElementById('rasp_odjel_list');
+  if (dlEl) dlEl.innerHTML = allOdjeli.map(o => `<option value="${o}">`).join('');
+
+  const tbody = document.getElementById('raspTbody');
+  if (!tbody) return;
+
+  const kupci = kupacList.length ? kupacList : [...new Set(dispozicije.map(d => d.kupac))].sort();
+  const rows = rasporedRows.filter(r => r.datum === datum).sort((a, b) => (a.createdAt||'').localeCompare(b.createdAt||''));
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Nema unosa za ovaj dan. Kliknite "+ Dodaj kamion".</td></tr>`;
+    return;
+  }
+
+  const inpStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px;width:100%';
+
+  tbody.innerHTML = rows.map(r => {
+    const ppKupac = ppKupacForOdjel(r.odjel);
+    const isPP = !!ppKupac;
+
+    // Kupac: ZAKLJUČAN na PP kupca ako je odjel iz Pretprodaje — cijeli odjel je
+    // već otkupljen od jednog kupca, nema smisla nuditi druge opcije.
+    const kupacCell = isPP
+      ? `<div style="padding:5px 8px;background:#2a1a38;border:1px solid #7a3aaa;border-radius:5px;font-size:13px;font-weight:700;color:#c47af0" title="Odjel je u Pretprodaji — kupac zaključan">🏷 ${ppKupac}</div>`
+      : `<select style="${inpStyle}" onchange="saveRaspRow('${r.id}','kupac',this.value)">
+          <option value="">— Kupac —</option>${kupci.map(k => `<option value="${k}"${r.kupac===k?' selected':''}>${k}</option>`).join('')}
+        </select>`;
+
+    // Dispozicija / Pretprodaja stanje
+    let dispText;
+    if (isPP) {
+      const info = ppOdjelInfo(r.odjel, r.sortiment);
+      dispText = info
+        ? `<strong>${info.broj||'—'}</strong> · ${info.ugovor||'—'}<div style="font-size:11px;color:var(--muted)">Stanje (PP): <strong style="color:${info.bal < 20 ? 'var(--red)' : 'var(--green)'}">${info.bal.toFixed(2)} m³</strong>${info.klase?' · '+info.klase:''}</div>`
+        : (r.sortiment ? '<span style="color:var(--red);font-size:12px">⚠ Nema PP stanja za taj sortiment!</span>' : '<span style="color:var(--muted)">—</span>');
+    } else {
+      const info = raspDispInfo(r.kupac, r.sortiment);
+      dispText = info
+        ? `<strong>${info.disp.broj||'—'}</strong> · ${info.disp.ugovor||'—'}<div style="font-size:11px;color:var(--muted)">Stanje: <strong style="color:${info.bal < 20 ? 'var(--red)' : 'var(--green)'}">${info.bal.toFixed(2)} m³</strong> · Disp. od ${isoToDots(info.disp.datum)}</div>`
+        : (r.kupac && r.sortiment ? '<span style="color:var(--red);font-size:12px">⚠ Nema dispozicije sa stanjem!</span>' : '<span style="color:var(--muted)">—</span>');
+    }
+
+    // Auto-prijedlog: za PP odjele kupac je već zaključan (nema šta predložiti);
+    // za regularne odjele predlaže najstariju dispoziciju bilo kojeg kupca.
+    let sugText, sugStyle;
+    if (isPP) {
+      sugText = `<span style="color:#c47af0;font-size:12px">🏷 Kupac zaključan (Pretprodaja)</span>`;
+      sugStyle = '';
+    } else {
+      const sug = autoSuggest(r.sortiment);
+      sugText = sug
+        ? `${sug.kupac}<div style="font-size:11px;color:var(--muted);font-weight:400">${sug.broj||''} · ${getBalance(sug)[r.sortiment].toFixed(2)} m³ · ${isoToDots(sug.datum)}</div>`
+        : '—';
+      sugStyle = sug ? 'color:var(--green);font-weight:700' : 'color:var(--muted)';
+    }
+
+    const sortOpts = FIELDS.map(f => `<option value="${f}"${r.sortiment===f?' selected':''}>${FL[f]}</option>`).join('');
+    return `<tr>
+      <td style="padding:6px 8px"><input type="text" list="rasp_odjel_list" value="${r.odjel||''}" style="${inpStyle}" onchange="onOdjelChange('${r.id}',this.value)"></td>
+      <td style="padding:6px 8px"><select style="${inpStyle}" onchange="saveRaspRow('${r.id}','sortiment',this.value)">
+        <option value="">— Sortiment —</option>${sortOpts}
+      </select></td>
+      <td style="padding:6px 8px">${kupacCell}</td>
+      <td style="padding:6px 10px;font-size:13px;line-height:1.4">${dispText}</td>
+      <td style="padding:6px 10px;font-size:13px;line-height:1.4;${sugStyle}">${sugText}</td>
+      <td style="padding:6px 4px;text-align:center"><button class="del-disp-btn" onclick="delRaspRow('${r.id}')">🗑</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function saveRaspRow(id, field, value) {
+  const row = rasporedRows.find(r => r.id === id);
+  if (!row) return;
+  row[field] = value;
+  await fbSetRasp(row);
+  renderRaspored();
+}
+
+// Odjel se promijenio — ako je novi odjel iz Pretprodaje, odmah zaključaj kupca
+// na tog jednog kupca (prepiše eventualno ranije ručno odabranog).
+async function onOdjelChange(id, value) {
+  const row = rasporedRows.find(r => r.id === id);
+  if (!row) return;
+  row.odjel = value;
+  const ppKupac = ppKupacForOdjel(value);
+  if (ppKupac) row.kupac = ppKupac;
+  await fbSetRasp(row);
+  renderRaspored();
+}
+
+async function addRasporedRow() {
+  const datum = getDateField('rasp_datum');
+  if (!datum) { showToast('Odaberite datum', 'error'); return; }
+  const row = {
+    id: 'rasp_' + Date.now(),
+    datum,
+    odjel: '',
+    sortiment: '',
+    kupac: '',
+    createdAt: new Date().toISOString(),
+  };
+  await fbSetRasp(row);
+}
+
+async function delRaspRow(id) {
+  await fbDelRasp(id);
+}
+
+// Redovi za odabrani dan grupirani po odjelu, s podacima o dispoziciji/PP
+function raspReportData() {
+  const datum = getDateField('rasp_datum');
+  const rows = rasporedRows
+    .filter(r => r.datum === datum)
+    .sort((a, b) => (a.odjel||'').localeCompare(b.odjel||'') || (a.createdAt||'').localeCompare(b.createdAt||''));
+  const grouped = {};
+  rows.forEach(r => {
+    const key = r.odjel || '(bez odjela)';
+    (grouped[key] = grouped[key] || []).push(r);
+  });
+  return { datum, grouped, count: rows.length };
+}
+
+function printRaspored() {
+  const { datum, grouped, count } = raspReportData();
+  if (!count) { showToast('Nema unosa za odabrani dan!', 'error'); return; }
+  const dateFmt = isoToDots(datum);
+
+  let bodyRows = '';
+  Object.keys(grouped).sort().forEach(odjel => {
+    const rows = grouped[odjel];
+    rows.forEach((r, i) => {
+      const ppKupac = ppKupacForOdjel(r.odjel);
+      const info = ppKupac ? ppOdjelInfo(r.odjel, r.sortiment) : raspDispInfo(r.kupac, r.sortiment);
+      const broj   = ppKupac ? (info?.broj||'')       : (info?.disp.broj||'');
+      const ugovor = ppKupac ? (info?.ugovor||'')      : (info?.disp.ugovor||'');
+      const bal    = ppKupac ? info?.bal               : info?.bal;
+      const datDisp= ppKupac ? ''                       : (info ? isoToDots(info.disp.datum) : '');
+      bodyRows += `<tr>
+        ${i === 0 ? `<td rowspan="${rows.length}" style="font-weight:700;vertical-align:middle">${odjel}${ppKupac?' 🏷':''}</td>` : ''}
+        <td style="text-align:center">${r.sortiment ? FL[r.sortiment] : ''}</td>
+        <td style="font-weight:600">${r.kupac||ppKupac||''}</td>
+        <td style="text-align:center">${ugovor}</td>
+        <td style="text-align:center">${broj}</td>
+        <td style="text-align:right;font-weight:600">${bal!=null ? bal.toFixed(2) + ' m³' : '—'}</td>
+        <td style="text-align:center">${datDisp}</td>
+      </tr>`;
+    });
+  });
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Raspored kamiona – ${dateFmt}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:'Times New Roman',serif;font-size:10pt;color:#000;background:#fff;padding:12mm 10mm}
+      .doc-header{text-align:center;margin-bottom:8mm}
+      .doc-header h2{font-size:12pt;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+      .doc-header h3{font-size:11pt;font-weight:600;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:5mm}
+      th,td{border:1px solid #000;padding:4px 6px;vertical-align:middle;font-size:9pt}
+      th{background:#e8e8e8;text-align:center;font-weight:700}
+      @media print{@page{size:A4 landscape;margin:8mm}}
+    </style>
+  </head><body>
+    <div class="doc-header">
+      <h2>POGON GOSPODARENJA ZA OPĆINU BOS. KRUPA</h2>
+      <h3>RASPORED KAMIONA ZA ${dateFmt}. GODINE</h3>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:130px">ODJEL</th>
+          <th style="width:85px">SORTIMENT</th>
+          <th>KUPAC</th>
+          <th style="width:130px">UGOVOR</th>
+          <th style="width:80px">BROJ DISP.</th>
+          <th style="width:85px">STANJE</th>
+          <th style="width:80px">DATUM DISP.</th>
+        </tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+    <div style="margin-top:12mm;display:flex;justify-content:space-between;font-size:8pt">
+      <div>Sastavio: ___________________________</div>
+      <div>Datum i vrijeme: ${fmtDateTimeObj(new Date())}</div>
+    </div>
+    <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Dozvoli popup prozore za štampanje!'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+async function copyRaspored() {
+  const { datum, grouped, count } = raspReportData();
+  if (!count) { showToast('Nema unosa za odabrani dan!', 'error'); return; }
+
+  let txt = `🚚 RASPORED KAMIONA – ${isoToDots(datum)}\n`;
+  Object.keys(grouped).sort().forEach(odjel => {
+    txt += `\n📍 ${odjel}\n`;
+    grouped[odjel].forEach((r, i) => {
+      const ppKupac = ppKupacForOdjel(r.odjel);
+      txt += `${i+1}. ${r.sortiment ? FL[r.sortiment] : '?'} – ${r.kupac||ppKupac||'?'}${ppKupac?' 🏷':''}\n`;
+      if (ppKupac) {
+        const info = ppOdjelInfo(r.odjel, r.sortiment);
+        if (info) txt += `   PP broj: ${info.broj||'—'} · Ugovor: ${info.ugovor||'—'} · Stanje: ${info.bal.toFixed(2)} m³\n`;
+        else txt += `   ⚠ Nema PP stanja za taj sortiment!\n`;
+      } else {
+        const info = raspDispInfo(r.kupac, r.sortiment);
+        if (info) txt += `   Disp: ${info.disp.broj||'—'} od ${isoToDots(info.disp.datum)} · Ugovor: ${info.disp.ugovor||'—'} · Stanje: ${info.bal.toFixed(2)} m³\n`;
+        else if (r.kupac && r.sortiment) txt += `   ⚠ Nema dispozicije sa stanjem!\n`;
+      }
+    });
+  });
+
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast('📋 Raspored kopiran – zalijepi u Viber/WhatsApp', 'success');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    showToast('📋 Raspored kopiran – zalijepi u Viber/WhatsApp', 'success');
+  }
 }
 
 let toastTimer;
