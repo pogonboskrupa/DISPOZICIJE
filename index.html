@@ -2460,15 +2460,22 @@ async function syncSheet() {
     window._syncData = { rows, todayStr, cv, cs, getDate };
 
 
-    // Always show last 5 days: today + 4 back
-    const last5 = [];
-    for (let i = 0; i < 5; i++) {
+    // Zadnjih 7 dana. Radni dani (pon-pet) prikazuju se uvijek. Vikend
+    // (subota/nedjelja) prikazuje se SAMO ako sheet ima podatke za taj dan —
+    // nedjelja je uvijek neradna pa se praktično nikad ne prikazuje, a subota
+    // radi povremeno pa se prikazuje samo kad stvarno ima otprema tog dana.
+    const last7 = [];
+    for (let i = 0; i < 7; i++) {
       const d = new Date(today.getTime() - i * 86400000);
-      last5.push(localDateStr(d));
+      const dStr = localDateStr(d);
+      const dow = d.getDay(); // 0=nedjelja, 6=subota
+      const isWeekend = dow === 0 || dow === 6;
+      if (isWeekend && !(dateCountMap[dStr] > 0)) continue;
+      last7.push(dStr);
     }
 
     const list = document.getElementById('syncDateList');
-    list.innerHTML = last5.map(d => {
+    list.innerHTML = last7.map(d => {
       const [y, m, day] = d.split('-');
       const label = `${day}.${m}.${y}`;
       const count = dateCountMap[d] || 0;
