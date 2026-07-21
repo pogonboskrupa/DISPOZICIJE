@@ -2562,7 +2562,8 @@ async function doSync() {
     const existingKeys     = new Set(otpreme.filter(o => o.sheet_key).map(o => o.sheet_key));
     const existingBaseKeys = new Set([...existingKeys].map(k => k.replace(/_d[A-Za-z0-9]+$/, '')));
 
-    let newCount  = 0;
+    let newCount     = 0;
+    let skippedCount = 0; // redovi preskočeni jer su prepoznati kao već uneseni (sheet_key se poklopio)
     let batchDocs = [];
 
     // BUG FIX: potrošnja se prati na nivou CIJELOG sync runa, ne po redu —
@@ -2604,7 +2605,7 @@ async function doSync() {
               && p.klasa === pm.klasa
           );
           const rowKey = uniqueKey(`pp_${datum}_${kupacRaw}_${activeOdjel}_${pm.klasa}_${qty}`);
-          if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
+          if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) { skippedCount++; continue; }
           existingKeys.add(rowKey);
           existingBaseKeys.add(rowKey);
           const otp = {
@@ -2652,7 +2653,7 @@ async function doSync() {
         const ppEntry = pretprodaje.find(p => kupacMatch(p.kupac, kupacRaw) && p.klasa === pm.klasa);
         if (!ppEntry) continue; // preskoči ako nema matching PP unosa — ne kreira unmatched za regularne kupce
         const ppKey = uniqueKey(`pp_auto_${datum}_${kupacRaw}_${pm.sheetCol}_${qty}`);
-        if (existingKeys.has(ppKey) || existingBaseKeys.has(ppKey)) continue;
+        if (existingKeys.has(ppKey) || existingBaseKeys.has(ppKey)) { skippedCount++; continue; }
         existingKeys.add(ppKey);
         existingBaseKeys.add(ppKey);
         const otp = {
@@ -2677,7 +2678,7 @@ async function doSync() {
       if (totalQty === 0) continue;
 
       const rowKey = uniqueKey(`sheet_${datum}_${kupacRaw}_${FIELDS.map(f=>qtyRow[f]).join('_')}`);
-      if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) continue;
+      if (existingKeys.has(rowKey) || existingBaseKeys.has(rowKey)) { skippedCount++; continue; }
       existingKeys.add(rowKey);
       existingBaseKeys.add(rowKey);
 
@@ -2763,6 +2764,7 @@ async function doSync() {
     await sleep(400);
     const cleaned = await transferDebtAndCleanup();
     showToast(`✅ Sinkronizirano: ${newCount} novih zapisa za ${datesLabel}` +
+      (skippedCount ? ` · ⏭️ ${skippedCount} već postojalo (preskočeno, bez duplikata)` : '') +
       (cleaned ? ` · 🗄️ Očišćeno ${cleaned} iscrpljenih/nuliranih dispozicija.` : ''), 'success');
 
   } catch(e) {
