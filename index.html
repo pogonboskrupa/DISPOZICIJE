@@ -899,6 +899,15 @@ function klasaSortKey(klasa) {
   const idx = PP_KLASA_ORDER.indexOf(klasa);
   return idx === -1 ? 999 : idx;
 }
+// Koje polje (FIELDS) svaka standardna klasa puni — koristi se za dodavanje
+// novog sortimenta na već postojeći odjel u Pretprodaji.
+const PP_KLASA_FIELD = {
+  'F/L': 'tc', 'I klasa': 'tc', 'II klasa': 'tc', 'III klasa': 'tc',
+  'Rudno/Šip': 'rud', 'Škart': 'rud',
+  'Cel.Duga': 'cd', 'Cel.Cij.': 'cc',
+  'F/L L': 'fl', 'I klasa L': 'tl', 'II klasa L': 'tl', 'III klasa L': 'tl',
+  'Ogr.Dugi': 'od', 'Ogr.Cijepani': 'oc',
+};
 
 // ═══════════════════════════════════════════════════════
 //  STATE
@@ -3012,6 +3021,16 @@ function renderPretprodaja() {
       </tr>`;
     });
 
+    // Dugme za dodavanje sortimenta kojeg odjel još nema (samo ako ima šta dodati)
+    const missingKlase = PP_KLASA_ORDER.filter(k => !klasaMap[k]);
+    if (missingKlase.length) {
+      html += `<tr id="pp-addklasa-${gi}">
+        <td colspan="10" style="padding:6px 8px">
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="showAddKlasaRow(${gi})">+ Dodaj sortiment</button>
+        </td>
+      </tr>`;
+    }
+
     // Total row — svjetlo zlatna boja (izdvaja ukupno za odjel od pojedinačnih klasa-redova)
     const totStyle = 'background:#3a2f10;color:#f0c040;font-weight:700';
     html += `<tr class="total-row" style="${totStyle}">
@@ -3233,6 +3252,62 @@ async function savePP(id) {
   };
   await fbSetPretprodaja(updated);
   showToast('Red ažuriran!', 'success');
+}
+
+// Prikaži inline formu za dodavanje sortimenta kojeg ovaj odjel još nema
+function showAddKlasaRow(gi) {
+  const grouped = getPPGroups();
+  const key  = Object.keys(grouped)[gi];
+  const rows = grouped[key];
+  const el   = document.getElementById(`pp-addklasa-${gi}`);
+  if (!rows || !el) return;
+  const existingKlase = new Set(rows.map(p => p.klasa || '—'));
+  const missing = PP_KLASA_ORDER.filter(k => !existingKlase.has(k));
+  if (!missing.length) return;
+  const opts = missing.map(k => `<option value="${k}">${k}</option>`).join('');
+  el.innerHTML = `
+    <td colspan="10" style="padding:8px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="ppa_klasa_${gi}" onchange="document.getElementById('ppa_klasa_custom_${gi}').style.display = this.value==='__custom__' ? '' : 'none'"
+          style="background:var(--surface2);border:1px solid var(--accent);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px">
+          ${opts}
+          <option value="__custom__">Ostalo (upiši ručno)...</option>
+        </select>
+        <input id="ppa_klasa_custom_${gi}" type="text" placeholder="Naziv klase" style="display:none;width:120px;background:var(--surface2);border:1px solid var(--accent);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px">
+        <input id="ppa_qty_${gi}" type="text" inputmode="decimal" placeholder="m³" style="width:80px;background:var(--surface2);border:1px solid var(--accent);border-radius:5px;padding:5px 8px;color:var(--text);font-size:13px">
+        <button class="btn btn-success" style="padding:5px 12px;font-size:12px" onclick="saveNewKlasa(${gi})">💾 Dodaj</button>
+        <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" onclick="renderPretprodaja()">✕</button>
+      </div>
+    </td>`;
+}
+
+// Kreira novi klasa-red (novi pretprodaja dokument) za postojeći odjel — nasljeđuje
+// kupca/odjel/broj/ugovor od grupe, datum je danas.
+async function saveNewKlasa(gi) {
+  const grouped = getPPGroups();
+  const key  = Object.keys(grouped)[gi];
+  const rows = grouped[key];
+  if (!rows) return;
+  const r0 = rows[0];
+  const selEl = document.getElementById(`ppa_klasa_${gi}`);
+  let klasa = selEl?.value;
+  if (klasa === '__custom__') klasa = (document.getElementById(`ppa_klasa_custom_${gi}`)?.value||'').trim();
+  klasa = (klasa||'').trim();
+  const qty = parseNum(document.getElementById(`ppa_qty_${gi}`)?.value);
+  if (!klasa) { showToast('Odaberi ili upiši naziv klase!', 'error'); return; }
+  if (qty <= 0) { showToast('Unesite količinu veću od 0!', 'error'); return; }
+  const field = PP_KLASA_FIELD[klasa] || 'tc';
+  const p = {
+    id: 'pp' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+    createdAt: new Date().toISOString(),
+    kupac: r0.kupac, odjel: r0.odjel, broj: r0.broj || '', ugovor: r0.ugovor || '',
+    datum: localDateStr(),
+    klasa,
+    tc:0, rud:0, cd:0, cc:0, tl:0, fl:0, oc:0, od:0,
+  };
+  p[field] = qty;
+  await fbSetPretprodaja(p);
+  showToast(`✅ Sortiment "${klasa}" dodan za odjel "${r0.odjel}"!`, 'success');
 }
 
 async function deletePretprodajaEntry(id) {
