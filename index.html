@@ -2849,7 +2849,7 @@ function ppGroupHeaderHtml(gi, r0, sviBrojevi, datFmt) {
     <span style="font-size:13px;color:var(--muted)">${datFmt}</span>
     ${r0.odjel ? `<span style="font-size:13px;color:var(--accent);font-weight:600">🌲 Odjel ${r0.odjel}</span>` : ''}
     <span style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${r0.ugovor||'—'}</strong></span>
-    <button class="edit-disp-btn" onclick="editGroupInfo(${gi})" title="Uredi broj dispozicije i ugovor">✏️ Uredi</button>
+    <button class="edit-disp-btn" onclick="editGroupInfo(${gi})" title="Uredi kupca, broj dispozicije i ugovor">✏️ Uredi</button>
   `;
 }
 
@@ -2861,7 +2861,10 @@ function editGroupInfo(gi) {
   if (!rows || !el) return;
   const r0 = rows[0];
   el.innerHTML = `
-    <span style="font-family:Syne,sans-serif;font-weight:800;font-size:16px;color:var(--text)">${r0.kupac}</span>
+    <span style="font-size:12px;color:var(--muted)">Kupac:
+      <input id="ppg_kupac_${gi}" list="bpp_kupac_list" value="${r0.kupac||''}" placeholder="npr. HUSETIĆ LOT 9"
+        style="width:150px;font-size:13px;font-weight:700;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--accent);border-radius:4px">
+    </span>
     <span style="font-size:13px;color:var(--muted)">Disp:
       <input id="ppg_broj_${gi}" value="${r0.broj||''}" placeholder="npr. 01/26-L"
         style="width:110px;font-size:12px;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--accent);border-radius:4px">
@@ -2881,12 +2884,14 @@ async function saveGroupInfo(gi) {
   const key  = Object.keys(grouped)[gi];
   const rows = grouped[key];
   if (!rows) return;
+  const kupac  = (document.getElementById(`ppg_kupac_${gi}`)?.value||'').trim();
   const broj   = (document.getElementById(`ppg_broj_${gi}`)?.value||'').trim();
   const ugovor = (document.getElementById(`ppg_ugovor_${gi}`)?.value||'').trim();
+  if (!kupac) { showToast('Kupac je obavezan!', 'error'); return; }
   for (const p of rows) {
-    await fbSetPretprodaja({ ...p, broj, ugovor });
+    await fbSetPretprodaja({ ...p, kupac, broj, ugovor });
   }
-  showToast('Broj dispozicije i ugovor ažurirani za cijeli odjel!', 'success');
+  showToast('Kupac, broj dispozicije i ugovor ažurirani za cijeli odjel!', 'success');
 }
 
 function renderPretprodaja() {
