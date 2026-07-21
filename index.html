@@ -3012,18 +3012,19 @@ function renderPretprodaja() {
       </tr>`;
     });
 
-    // Total row
-    html += `<tr class="total-row">
-      <td style="text-align:left">UKUPNO</td>
-      <td style="border-left:2px solid var(--border)">${totOrig.tc  ? fmtBal(totBal.tc,  totOrig.tc)  : ''}</td>
-      <td>${totOrig.rud ? fmtBal(totBal.rud, totOrig.rud) : ''}</td>
-      <td>${totOrig.cd  ? fmtBal(totBal.cd,  totOrig.cd)  : ''}</td>
-      <td>${totOrig.cc  ? fmtBal(totBal.cc,  totOrig.cc)  : ''}</td>
-      <td style="border-left:2px solid var(--border)">${totOrig.tl  ? fmtBal(totBal.tl,  totOrig.tl)  : ''}</td>
-      <td>${totOrig.fl  ? fmtBal(totBal.fl,  totOrig.fl)  : ''}</td>
-      <td>${totOrig.oc  ? fmtBal(totBal.oc,  totOrig.oc)  : ''}</td>
-      <td>${totOrig.od  ? fmtBal(totBal.od,  totOrig.od)  : ''}</td>
-      <td></td>
+    // Total row — svjetlo zlatna boja (izdvaja ukupno za odjel od pojedinačnih klasa-redova)
+    const totStyle = 'background:#3a2f10;color:#f0c040;font-weight:700';
+    html += `<tr class="total-row" style="${totStyle}">
+      <td style="text-align:left;${totStyle}">UKUPNO</td>
+      <td style="border-left:2px solid var(--border);${totStyle}">${totOrig.tc  ? fmtBal(totBal.tc,  totOrig.tc)  : ''}</td>
+      <td style="${totStyle}">${totOrig.rud ? fmtBal(totBal.rud, totOrig.rud) : ''}</td>
+      <td style="${totStyle}">${totOrig.cd  ? fmtBal(totBal.cd,  totOrig.cd)  : ''}</td>
+      <td style="${totStyle}">${totOrig.cc  ? fmtBal(totBal.cc,  totOrig.cc)  : ''}</td>
+      <td style="border-left:2px solid var(--border);${totStyle}">${totOrig.tl  ? fmtBal(totBal.tl,  totOrig.tl)  : ''}</td>
+      <td style="${totStyle}">${totOrig.fl  ? fmtBal(totBal.fl,  totOrig.fl)  : ''}</td>
+      <td style="${totStyle}">${totOrig.oc  ? fmtBal(totBal.oc,  totOrig.oc)  : ''}</td>
+      <td style="${totStyle}">${totOrig.od  ? fmtBal(totBal.od,  totOrig.od)  : ''}</td>
+      <td style="${totStyle}"></td>
     </tr>`;
 
     html += `</tbody></table></div></div>`;
