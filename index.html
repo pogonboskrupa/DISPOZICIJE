@@ -342,6 +342,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <div class="status-bar" id="statusBar"></div>
     <div class="search-bar">
       <input type="text" id="searchInput" placeholder="Pretraži po kupcu ili ugovoru..." oninput="renderPregled()">
+      <select id="sortimentFilter" onchange="renderPregled()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 12px;color:var(--text);font-size:13px">
+        <option value="">Svi sortimenti</option>
+      </select>
       <button class="btn btn-ghost" onclick="exportCSV()">⬇ Export CSV</button>
       <label id="desktopToggleWrap"><input type="checkbox" id="desktopToggle" checked onchange="toggleDesktopView(this.checked)"> 🖥 Desktop</label>
     </div>
@@ -1383,6 +1386,14 @@ function renderPregled() {
   const _naslov = document.getElementById('pregledNaslov');
   if (_naslov) _naslov.textContent = `PREGLED DISPOZICIJA NA DAN ${_dn}`;
 
+  // Popuni filter sortimenta jednom (opcije se ne mijenjaju)
+  const sortFilterEl = document.getElementById('sortimentFilter');
+  if (sortFilterEl && sortFilterEl.options.length <= 1) {
+    sortFilterEl.innerHTML = '<option value="">Svi sortimenti</option>' +
+      FIELDS.map(f => `<option value="${f}">${FL[f]}</option>`).join('');
+  }
+  const sortimentFilterVal = sortFilterEl?.value || '';
+
   // Postavi indikator ako nije ništa odabrano (default: kupac A-Z)
   if (!sortCol) {
     document.querySelectorAll('.sortable').forEach(th => th.classList.remove('sort-asc','sort-desc'));
@@ -1400,6 +1411,7 @@ function renderPregled() {
     if (!d.kupac.toLowerCase().includes(search) &&
         !(d.ugovor||'').toLowerCase().includes(search) &&
         !(d.broj||'').toLowerCase().includes(search)) return;
+    if (sortimentFilterVal && !(d[sortimentFilterVal] > 0)) return; // filter: samo dispozicije koje imaju odabrani sortiment
     const st = balStatus(d, _balCache);
     if (st === 'empty') return; // bez definiranih kolicina — ignoriraj
     // Sakrij SAMO ako je iscrpljena I postoji druga dispozicija istog kupca
