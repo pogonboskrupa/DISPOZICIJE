@@ -2808,6 +2808,11 @@ async function doSync() {
       (skippedCount ? ` · ⏭️ ${skippedCount} već postojalo (preskočeno, bez duplikata)` : '') +
       (cleaned ? ` · 🗄️ Očišćeno ${cleaned} iscrpljenih/nuliranih dispozicija.` : ''), 'success');
 
+    // Eksplicitno osvježi Dispozicije (tabelu i statusnu traku/ukupne količine)
+    // odmah nakon sync-a — ne oslanjaj se samo na realtime listener koji bi
+    // inače trebao stići do istog rezultata, ali s neizvjesnim tajmingom.
+    renderPregled();
+
   } catch(e) {
     console.error(e);
     showToast('❌ Greška: ' + e.message, 'error');
