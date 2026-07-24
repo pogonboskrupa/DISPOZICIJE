@@ -1553,32 +1553,38 @@ function renderPregled() {
   const mobList = document.getElementById('mob-list');
   if (mobList) mobList.innerHTML = mhtml || '<div class="empty-state"><div class="big">📭</div><p>Nema dispozicija</p></div>';
 
-  // Statusna traka mora prikazivati sumu iz OVOG (filtriranog) skupa — inače
-  // se, čim je aktivna pretraga ili filter po sortimentu, header ne poklapa
-  // sa "UKUPNO" redom u tabeli ispod (izgleda kao netačno sumiranje).
-  renderStatusBar(totalRows, kupciKeys.length, totOrig);
+  // Statusna traka mora prikazivati sumu iz OVOG (filtriranog) skupa i STANJE
+  // (totBal), ne upisanu količinu (totOrig) — tabelin "UKUPNO" red vizuelno
+  // prikazuje stanje (fmtBal ispisuje bal, ne orig), pa bi header s upisanim
+  // iznosom uvijek izgledao veći i netačan u odnosu na ono što se vidi ispod.
+  renderStatusBar(totalRows, kupciKeys.length, totBal);
 }
 
-// `dispCount`/`kupacCount`/`orig` (opcionalno) — kad se prosljeđuju iz
-// renderPregled(), statusna traka prikazuje sumu TAČNO onog skupa koji je
-// trenutno vidljiv u tabeli (poštuje pretragu i filter po sortimentu).
-// Bez argumenata (pozvano odnekud drugdje) računa se iz cijelog niza.
-function renderStatusBar(dispCount, kupacCount, orig) {
+// `dispCount`/`kupacCount`/`bal` (opcionalno) — kad se prosljeđuju iz
+// renderPregled(), statusna traka prikazuje STANJE (preostalo, ne upisanu
+// količinu) tačno onog skupa koji je trenutno vidljiv u tabeli (poštuje
+// pretragu, filter po sortimentu, i isključuje dispozicije u minusu — isto
+// kao "UKUPNO" red na dnu tabele, koji preko fmtBal() takođe prikazuje bal).
+// Bez argumenata (pozvano odnekud drugdje) računa se stanje iz cijelog niza.
+function renderStatusBar(dispCount, kupacCount, bal) {
   const sb = document.getElementById('statusBar');
   if (!sb) return;
   if (dispCount === undefined) {
     dispCount = dispozicije.length;
     kupacCount = [...new Set(dispozicije.map(d=>d.kupac))].length;
-    orig = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
-    dispozicije.forEach(d => FIELDS.forEach(f => orig[f]+=(d[f]||0)));
+    bal = {tc:0,rud:0,cd:0,cc:0,tl:0,fl:0,oc:0,od:0};
+    dispozicije.forEach(d => {
+      const b = getBalance(d);
+      FIELDS.forEach(f => { if (b[f] >= 0) bal[f] += b[f]; });
+    });
   }
-  const tO = FIELDS.reduce((s,f)=>s+orig[f],0);
+  const tO = FIELDS.reduce((s,f)=>s+bal[f],0);
 
   const sortLabels = {tc:'Trupci Č',rud:'Rudno',cd:'Cel.Duga',cc:'Cel.Cij.',
                       tl:'Trupci L',fl:'F/L',oc:'Ogr.Cij.',od:'Ogr.Dugi'};
-  const sortHtml = FIELDS.filter(f=>orig[f]>0).map(f =>
+  const sortHtml = FIELDS.filter(f=>bal[f]>0).map(f =>
     `<div class="divider"></div>
-     <div class="stat"><div class="sl">${sortLabels[f]}</div><div class="sv" style="color:var(--text);font-size:16px">${orig[f].toFixed(2)}</div></div>`
+     <div class="stat"><div class="sl">${sortLabels[f]}</div><div class="sv" style="color:var(--text);font-size:16px">${bal[f].toFixed(2)}</div></div>`
   ).join('');
 
   sb.innerHTML = `
