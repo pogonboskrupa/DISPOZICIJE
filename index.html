@@ -1485,7 +1485,11 @@ function renderPregled() {
           <button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši">🗑</button>
         </td>
       </tr>`;
-      FIELDS.forEach(f => { totBal[f] += bal[f]; totOrig[f] += (d[f]||0); });
+      // UKUPNO (i header i red na dnu) broji samo POZITIVNE dispozicije po
+      // sortimentu — polje u minusu se izostavlja iz zbira (ne oduzima ga,
+      // samo se ignoriše). Pojedinačni red iznad i dalje prikazuje svoj
+      // stvarni (crveni) minus — mijenja se samo agregatni zbir.
+      FIELDS.forEach(f => { if (bal[f] >= 0) { totBal[f] += bal[f]; totOrig[f] += (d[f]||0); } });
       totalRows++;
   });
 
