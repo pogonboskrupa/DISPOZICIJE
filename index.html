@@ -335,6 +335,7 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     <button class="tab" onclick="switchTab('historija')">📜 Historija otprema</button>
     <button class="tab" onclick="switchTab('potrosene')">🗄 Potrošene dispozicije</button>
     <button class="tab" onclick="switchTab('raspored')">🚚 Raspored</button>
+    <button class="tab" onclick="switchTab('neiskoristene')">⏰ Neiskorištene dispozicije</button>
   </div>
 
   <!-- PREGLED -->
@@ -673,6 +674,14 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
     </div>
   </div>
 
+  <!-- NEISKORIŠTENE DISPOZICIJE (30+ dana, nijedna otprema) -->
+  <div id="tab-neiskoristene" class="panel">
+    <div class="search-bar">
+      <input type="text" id="neiskSearch" placeholder="Pretraži po kupcu, broju, ugovoru..." oninput="renderNeiskoristene()">
+    </div>
+    <div id="neiskoristeneList"></div>
+  </div>
+
 </main>
 
 <!-- CONFIRM MODAL -->
@@ -798,6 +807,9 @@ tr.kupac-first td{border-top:2px solid var(--accent)!important;}
   <button class="mnav-btn" data-tab="raspored" onclick="switchTab('raspored')">
     <span class="mni">🚚</span><span class="mnl">Raspored</span>
   </button>
+  <button class="mnav-btn" data-tab="neiskoristene" onclick="switchTab('neiskoristene')">
+    <span class="mni">⏰</span><span class="mnl">30+ dana</span>
+  </button>
   <button class="mnav-btn" id="installBtn" onclick="pwaInstall()">
     <span class="mni">📲</span><span class="mnl">Instaliraj</span>
   </button>
@@ -861,6 +873,12 @@ const fmtDateTimeObj = date => {
   const d = (date instanceof Date) ? date : new Date();
   return `${fmtDateObj(d)} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
+// Timestamp unosa dispozicije: iz createdAt ili iz id-a (d{timestamp})
+function getCreatedTs(d) {
+  if (d.createdAt) return new Date(d.createdAt).getTime();
+  const n = parseInt(String(d.id||'').replace(/^d/, ''));
+  return isNaN(n) ? 0 : n;
+}
 
 // Poklapanje imena kupaca: tačno poklapanje uvijek; podstring poklapanje
 // samo kad su OBA imena ≥5 znakova (sprječava da se npr. 'BOR' poklopi
@@ -926,7 +944,7 @@ let pendingOtp   = null;
 let db, fs;
 let sortCol = null;   // null = abecedno po kupcu
 let sortDir = 1;      // 1 = asc, -1 = desc
-const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','potrosene','raspored'];
+const TAB_NAMES = ['pregled','nova','pretprodaja','otprema','hist-disp','historija','potrosene','raspored','neiskoristene'];
 
 function sortBy(col) {
   if (sortCol === col) {
@@ -3385,13 +3403,6 @@ function renderHistDisp() {
   const now    = Date.now();
   const ms30d  = 30 * 24 * 60 * 60 * 1000;
 
-  // Timestamp od unosa: iz createdAt ili iz id-a (d{timestamp})
-  function getCreatedTs(d) {
-    if (d.createdAt) return new Date(d.createdAt).getTime();
-    const n = parseInt(d.id.replace(/^d/, ''));
-    return isNaN(n) ? 0 : n;
-  }
-
   const filtered = dispozicije.filter(d => {
     if (now - getCreatedTs(d) > ms30d) return false;
     return !search ||
@@ -3454,6 +3465,66 @@ function renderHistDisp() {
 }
 
 // ═══════════════════════════════════════════════════════
+//  NEISKORIŠTENE DISPOZICIJE (30+ dana od unosa, nijedna otprema)
+// ═══════════════════════════════════════════════════════
+function renderNeiskoristene() {
+  const search = (document.getElementById('neiskSearch')?.value||'').toLowerCase();
+  const list   = document.getElementById('neiskoristeneList');
+  if (!list) return;
+  const now   = Date.now();
+  const ms30d = 30 * 24 * 60 * 60 * 1000;
+
+  const filtered = dispozicije.filter(d => {
+    const total = FIELDS.reduce((s,f) => s + (d[f]||0), 0);
+    if (total <= 0) return false; // prazna dispozicija — nema šta iskoristiti
+    if (now - getCreatedTs(d) < ms30d) return false; // mora biti staro barem 30 dana
+    const spent = otpreme.some(o => o.disp_id === d.id); // ijedna otprema = "iskorišteno"
+    if (spent) return false;
+    return !search ||
+      d.kupac.toLowerCase().includes(search) ||
+      (d.broj||'').toLowerCase().includes(search) ||
+      (d.ugovor||'').toLowerCase().includes(search);
+  });
+
+  // Najstarije (najduže neiskorištene) prve
+  filtered.sort((a, b) => getCreatedTs(a) - getCreatedTs(b));
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">⏰</div><p>Nema neiskorištenih dispozicija starijih od 30 dana</p></div>`;
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(d => {
+    const ts      = getCreatedTs(d);
+    const dana    = ts ? Math.floor((now - ts) / 86400000) : null;
+    const uneseno = ts ? fmtDateTimeObj(new Date(ts)) : '—';
+    const dispDat = d.datum ? d.datum.split('-').reverse().join('.') : '—';
+    const amounts = FIELDS.filter(f => d[f] > 0).map(f =>
+      `<div class="val-item"><div class="vl">${FL[f]}</div><div class="vv">${d[f].toFixed(2)} m³</div></div>`
+    ).join('');
+
+    html += `<div class="otprema-card" style="margin-bottom:8px;align-items:flex-start;border-left:3px solid var(--red)">
+      <div style="min-width:170px;flex-shrink:0">
+        <div style="font-family:Syne,sans-serif;font-weight:800;font-size:15px;color:var(--text);margin-bottom:3px">${d.kupac}</div>
+        <div style="font-size:12px;color:var(--muted)">Br: <strong style="color:var(--text)">${d.broj||'—'}</strong></div>
+        ${d.ugovor ? `<div style="font-size:12px;color:var(--muted)">Ugovor: <strong style="color:var(--text)">${d.ugovor}</strong></div>` : ''}
+        <div style="font-size:12px;color:var(--muted)">Datum disp.: <strong>${dispDat}</strong></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px">Uneseno: ${uneseno}</div>
+        <div style="margin-top:4px"><span class="bal-chip bal-neg">⏰ ${dana!=null ? dana+' dana' : '—'} bez otpreme</span></div>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;flex:1">${amounts||'<span style="color:var(--muted);font-size:13px">—</span>'}</div>
+      <div style="white-space:nowrap">
+        <button class="edit-disp-btn" onclick="editDisp('${d.id}')" title="Uredi">✏️ Edit</button>
+        <button class="del-disp-btn" onclick="deleteDisp('${d.id}')" title="Obriši">🗑</button>
+      </div>
+    </div>`;
+  });
+
+  list.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${filtered.length} dispozicij${filtered.length===1?'a':filtered.length<5?'e':'a'} starij${filtered.length===1?'a':'e'} od 30 dana bez ijedne otpreme</div>` + html;
+}
+
+// ═══════════════════════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════════════════════
 function toggleDesktopView(isDesktop) {
@@ -3484,6 +3555,7 @@ function switchTab(t) {
   if(t==='historija')   renderHistorija();
   if(t==='potrosene')   renderPotrosene();
   if(t==='raspored')    renderRaspored();
+  if(t==='neiskoristene') renderNeiskoristene();
 }
 
 function renderAll() {
@@ -3497,6 +3569,7 @@ function renderAll() {
   if (names[idx]==='historija')   renderHistorija();
   if (names[idx]==='potrosene')   renderPotrosene();
   if (names[idx]==='raspored')    renderRaspored();
+  if (names[idx]==='neiskoristene') renderNeiskoristene();
 }
 
 // ═══════════════════════════════════════════════════════
